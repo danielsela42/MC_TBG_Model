@@ -150,6 +150,10 @@ def calcul_energy_mag_C_X(config, L, eqSteps, err_runs, sequential, initial=10):
         delSusceptibility = np.std(Xz)        
         Susceptibilities.append(Susceptibility)
         delSusceptibilities.append(delSusceptibility)
+
+        # Estimate relaxation time
+        # energy_corr, ener_rel, A_ener = correlation(Ez, initial)
+        # mag_corr, mag_rel, A_mag = correlation(Mz, initial)
         
 
         if T[t] - T_c >= 0:

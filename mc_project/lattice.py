@@ -57,7 +57,6 @@ def get_index(point, pos, r):
         if vect_equal(point, vec, r):
             return count
         count += 1
-    
     if count == 0:
         raise Exception("ERROR: Could not match a vector to an index")
 
@@ -281,7 +280,7 @@ class LatticeStructure():
                 if np.linalg.norm(cand) <= self.size:
                     shift_set.append((i, j))
                     bound_corners.append(cand*max_int)
-        plt.scatter([corner[0] for corner in bound_corners], [corner[1] for corner in bound_corners])
+        # plt.scatter([corner[0] for corner in bound_corners], [corner[1] for corner in bound_corners])
 
         corners = arrange_vects(bound_corners)
 
@@ -342,7 +341,10 @@ class LatticeStructure():
                 
                 if self.centers or not ((i + n - j - m) % 3 == 0 and (2*i+ 2*n +j + m) % 3 == 0):
                     shifted_neigh = shifted(neigh_cand, corners, center_basis, r)
-                    neighbors.append((get_index(shifted_neigh, pos, r), shifted_neigh))
+                    ind = get_index(shifted_neigh, pos, r)
+                    neighbors.append((ind, shifted_neigh))
+                    if ind == None:
+                        print(p, count)
                 
             graph.append((p, neighbors))
             
@@ -391,5 +393,5 @@ if __name__ == "__main__":
     lattice = LatticeStructure('hex', cutoff=cutoff, size=size, cutoff_type='m')
     lattice.plot_lattice_periodic()
     a = lattice.periodic_graph()
-    print(a[7], a[11][0])
+    print(a[1], a[11][0])
     #lattice.plot_shells(2)

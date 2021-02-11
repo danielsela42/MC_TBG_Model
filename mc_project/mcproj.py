@@ -27,23 +27,27 @@ def total_E(config, graph):
     return total_energy
 
 
-def energy_diff(cand, curr, neighbors):
+def energy_diff(cand, curr, neighbors, config):
     energy = 0
-    for neighbor in neighbors:
-        cand_diff = cand - neighbor
-        curr_diff = curr - neighbor
-        energy += sum(cand_diff*cand_diff) - sum(curr_diff*curr_diff)
+    for j, _ in neighbors:
+        psi_neigh = config[j]
+        cand_diff = cand - psi_neigh
+        curr_diff = curr - psi_neigh
+        energy += sum(sum(cand_diff*cand_diff)) - sum(sum(curr_diff*curr_diff))
     return energy
 
 
 def MC_step(n_points, config, graph, beta):
     '''Monte Carlo move using Metropolis algorithm '''
     for i in range(n_points):
-        cand = np.random.randint(0, n_points) # looping over i & j therefore use a & b
-        curr =  config[i]
+        rand_pos = np.random.randint(0, n_points)
+        curr = config[rand_pos]
+        cand = np.random.uniform(low=-1, high=1, size=(4, 2))
+        norm = sum(sum(cand*cand))
+        cand *= 1/norm
         upd = curr
         neighbors = graph[i][1]
-        del_E = energy_diff(cand, curr, neighbors)
+        del_E = energy_diff(cand, curr, neighbors, config)
         if del_E < 0:
             upd = cand
         elif np.random.rand() < np.exp(-del_E*beta):
@@ -60,8 +64,8 @@ def calculation(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error
 
     config = init(n_points)
         
-    nt      = 20         #  number of temperature points
-    mcSteps = 1000
+    nt      = 10         #  number of temperature points
+    mcSteps = 100
         
     # the number of MC sweeps for equilibrium should be at least equal to the number of MC sweeps for equilibrium
 
@@ -120,12 +124,7 @@ def plots(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error=10**(
 
     # shift_T = [i for i in range(len(T))]
 
-    fig, axs = plt.subplots(1, 1)
-    fig.tight_layout()
-
-    ax = axs[0, 0]
-    ax.errorbar(x=T, y=Energies, yerr=delEnergies)
-    ax.set_title('Energies')
+    plt.errorbar(x=T, y=Energies, yerr=delEnergies)
 
     plt.show()
 
@@ -136,7 +135,7 @@ if __name__ == "__main__":
     eqSteps = 50
     err_runs = 25
     group = 'h'
-    cutoff = 10
+    cutoff = 9
     size = 1
     sequential = False
     initial = 20

@@ -23,7 +23,7 @@ def total_E(config, graph):
         psi = config[i]
         for ind, _ in graph[i][1]:
             diff = psi - config[ind]
-            total_energy += sum(diff*diff)
+            total_energy += sum(sum(diff*diff))
     return total_energy
 
 
@@ -64,8 +64,8 @@ def calculation(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error
 
     config = init(n_points)
         
-    nt      = 10         #  number of temperature points
-    mcSteps = 100
+    nt      = 30         #  number of temperature points
+    mcSteps = 512
         
     # the number of MC sweeps for equilibrium should be at least equal to the number of MC sweeps for equilibrium
 
@@ -84,10 +84,11 @@ def calculation(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error
         # evolve the system to equilibrium
         for _ in range(eqSteps):
             MC_step(n_points, config, graph, beta)
-        # list of ten macroscopic properties
+
+        # Perform sweeps
         Ez = []
         for _ in range(err_runs):
-            E =  0
+            E = 0
             for _ in range(mcSteps):
                 MC_step(n_points, config, graph, beta)           
                 energy = total_E(config, graph) # calculate the energy at time stamp
@@ -95,14 +96,13 @@ def calculation(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error
                 # sum up total energy and mag after each time steps
 
                 E += energy
-
             # mean (divide by total time steps)
 
             E_mean = E/mcSteps
 
             # calculate macroscopic properties (divide by # sites) and append
 
-            Energy = E_mean/(L**2)
+            Energy = E_mean/n_points
 
             Ez.append(Energy)
 
@@ -131,9 +131,8 @@ def plots(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error=10**(
 
 
 if __name__ == "__main__":
-    L = 4
-    eqSteps = 50
-    err_runs = 25
+    eqSteps = 500
+    err_runs = 50
     group = 'h'
     cutoff = 9
     size = 1

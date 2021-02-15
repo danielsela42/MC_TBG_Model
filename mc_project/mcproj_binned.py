@@ -71,7 +71,7 @@ def binning(data, binned_series=list()):
         
 
 
-def calculation(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
 
     lattice = LatticeStructure(group=group, cutoff=cutoff, cutoff_type=cutoff_type, size=size, error=error)
     graph = lattice.periodic_graph()
@@ -80,7 +80,6 @@ def calculation(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
     config = init(n_points)
         
     nt      = 10         #  number of temperature points
-    mcSteps = 1028
         
     # the number of MC sweeps for equilibrium should be at least equal to the number of MC sweeps for equilibrium
 
@@ -100,7 +99,7 @@ def calculation(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
 
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
-        for _ in range(eqSteps):
+        for _ in range(eq_steps):
             MC_step(n_points, config, graph, beta)
 
         # Perform sweeps
@@ -113,15 +112,19 @@ def calculation(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
 
             E.append(energy)
 
+        print(len(E))
+
         binned_series = list()
         binning(E, binned_series)
+
+        print(len(binned_series))
 
         errors = list()
         for bin_list in binned_series:
             Ml = len(bin_list)
             if Ml == 1:
                 continue
-            avg = np.average(bin_list)
+            avg = np.mean(bin_list)
             summation = np.sum([(p - avg)**2 for p in bin_list])
             bin_error = np.sqrt((1/(Ml*(Ml-1)))*summation)
             errors.append(bin_error)
@@ -145,10 +148,10 @@ def calculation(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
     return results
 
 
-def plots(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
+def plots(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
 
     print("Performing calculation")
-    T, Energies, delEnergies, Energies_squared, rel_times, error_list = calculation(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
+    T, Energies, delEnergies, Energies_squared, rel_times, error_list = calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
     print("Plotting")
     l_list = [i for i in range(len(error_list[0]))]
 
@@ -171,10 +174,12 @@ def plots(eqSteps, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
 
 
 if __name__ == "__main__":
-    eqSteps = 1028
+    eqSteps = 1000
     group = 'h'
     cutoff = 9
     size = 1
-    plots(eqSteps, group, cutoff=cutoff, size=size, error=10**(-8))
+    n_bins = 10
+    mcSteps = 2**12
+    plots(eqSteps, mcSteps, n_bins, group, cutoff=cutoff, size=size, error=10**(-8))
 
 

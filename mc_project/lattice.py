@@ -53,12 +53,15 @@ def shifted(point, corners, center_basis, r):
 
 def get_index(point, pos, r):
     count = 0
+    upd_vec = None
     for vec in pos:
         if vect_equal(point, vec, r):
-            return count
-        count += 1
-    if count == 0:
-        raise Exception("ERROR: Could not match a vector to an index")
+            upd_vec = count
+            count += 1
+            break
+    #if count == 0:
+    #    raise Exception("ERROR: Could not match a vector to an index")
+    return upd_vec
 
 
 class LatticeStructure():
@@ -342,9 +345,9 @@ class LatticeStructure():
                 if self.centers or not ((i + n - j - m) % 3 == 0 and (2*i+ 2*n +j + m) % 3 == 0):
                     shifted_neigh = shifted(neigh_cand, corners, center_basis, r)
                     ind = get_index(shifted_neigh, pos, r)
-                    neighbors.append((ind, shifted_neigh))
                     if ind == None:
-                        print(p, count)
+                        raise Exception("ERROR: None index found")
+                    neighbors.append((ind, shifted_neigh))
                 
             graph.append((p, neighbors))
             
@@ -389,7 +392,7 @@ class LatticeStructure():
 
 if __name__ == "__main__":
     size = 1
-    cutoff = 6
+    cutoff = 9
     lattice = LatticeStructure('hex', cutoff=cutoff, size=size, cutoff_type='m')
     lattice.plot_lattice_periodic()
     a = lattice.periodic_graph()

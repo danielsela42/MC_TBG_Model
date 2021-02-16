@@ -78,6 +78,9 @@ def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=
             mcSteps - # of sweeps and data collection to perform
     '''
     
+    # Shift cutoff to smallest multiple of 3 above current
+    cutoff += 3 - (cutoff % 3)
+
     # Create lattice and graph (graph provides neighboring points)
     lattice = LatticeStructure(group=group, cutoff=cutoff, cutoff_type=cutoff_type, size=size, error=error)
     graph = lattice.periodic_graph()
@@ -118,12 +121,9 @@ def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=
 
             E.append(energy)
 
-        print(len(E))
 
         binned_series = list()
         binning(E, binned_series)
-
-        print(len(binned_series))
 
         errors = list()
         for bin_list in binned_series:
@@ -184,8 +184,8 @@ def plots(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, err
 if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
-    cutoff = 9
-    size = 0.1
+    cutoff = 26
+    size = 0.5
     n_bins = 10
     mcSteps = 2**12
     plots(eqSteps, mcSteps, n_bins, group, cutoff=cutoff, size=size, error=10**(-8))

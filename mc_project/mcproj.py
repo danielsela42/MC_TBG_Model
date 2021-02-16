@@ -64,8 +64,8 @@ def calculation(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error
 
     config = init(n_points)
         
-    nt      = 30         #  number of temperature points
-    mcSteps = 512
+    nt      = 5         #  number of temperature points
+    mcSteps = 100
         
     # the number of MC sweeps for equilibrium should be at least equal to the number of MC sweeps for equilibrium
 
@@ -132,7 +132,7 @@ def plots(eqSteps, err_runs, group, cutoff, cutoff_type='m', size=1, error=10**(
 
 if __name__ == "__main__":
     eqSteps = 500
-    err_runs = 50
+    err_runs = 20
     group = 'h'
     cutoff = 9
     size = 1

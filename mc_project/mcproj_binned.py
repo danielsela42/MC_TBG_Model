@@ -72,14 +72,20 @@ def binning(data, binned_series=list()):
 
 
 def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
+    ''' Perform Monte Carlo calculation for the model
 
+    Inputs: eq_steps - steps to equilibriate system after temperature change
+            mcSteps - # of sweeps and data collection to perform
+    '''
+    
+    # Create lattice and graph (graph provides neighboring points)
     lattice = LatticeStructure(group=group, cutoff=cutoff, cutoff_type=cutoff_type, size=size, error=error)
     graph = lattice.periodic_graph()
     n_points = len(graph)
 
     config = init(n_points)
         
-    nt      = 10         #  number of temperature points
+    nt = 5         #  number of temperature points
         
     # the number of MC sweeps for equilibrium should be at least equal to the number of MC sweeps for equilibrium
 
@@ -108,7 +114,7 @@ def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=
             MC_step(n_points, config, graph, beta)           
             energy = total_E(config, graph)/n_points # calculate the energy at time stamp
 
-            # sum up total energy and mag after each time steps
+            # Add to the list of energies after each sweep
 
             E.append(energy)
 
@@ -132,9 +138,11 @@ def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=
         # Approximate limit
         error = errors[-1]
 
+        # Calculate relaxation times
         rel_t = (1/2)*((error/errors[0])**2 -1)
         relaxation_times.append(rel_t)
 
+        # Calculate energies and get error as limit of binned errors
         Energy = np.mean(E)
         Energy_squared = np.mean(np.array(Energy)*np.array(Energy))
         Energies.append(Energy)
@@ -177,7 +185,7 @@ if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
     cutoff = 9
-    size = 1
+    size = 0.1
     n_bins = 10
     mcSteps = 2**12
     plots(eqSteps, mcSteps, n_bins, group, cutoff=cutoff, size=size, error=10**(-8))

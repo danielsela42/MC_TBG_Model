@@ -27,6 +27,13 @@ def total_E(config, graph):
     return total_energy
 
 
+def avg_energy(config, graph):
+    return total_E(config, graph)/len(graph)
+
+def squared_E(config, graph):
+    return avg_energy(config, graph)**2
+
+
 def energy_diff(cand, curr, neighbors, config):
     energy = 0
     for j, _ in neighbors:
@@ -68,39 +75,69 @@ def binning(data, binned_series=list()):
 
     binned_series.append(binned)
     binning(binned, binned_series)
-        
 
 
-def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
+def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
+    ''' Calculates mean, relaxation time, and error, of a data set quantities
+
+    input: quantities - list of data points for computation
+           batch_size - size of batches
+           num_batches - number of batches
+
+    returns: mean, relaxation time, error
+    '''
+    mean  = np.mean(quantities)
+    variance = np.var(quantities, ddof=ddof)
+
+    batch_means = list()
+    for i in range(num_batches):
+        batch_mean = (1/batch_size)*np.sum([quantities[j] for j in range(batch_size*i, batch_size*(i+1))])
+        batch_means.append(batch_mean)
+
+    batch_var = np.var(batch_means, ddof=ddof)
+
+    rel_t = batch_size*batch_var/variance
+    error = np.sqrt(variance*(1+2*rel_t)/(mc_steps))
+
+    return mean, rel_t, error
+
+
+def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
 
-    Inputs: eq_steps - steps to equilibriate system after temperature change
-            mcSteps - # of sweeps and data collection to perform
+    Inputs: nt - # temperature points
+            eq_steps - steps to equilibriate system after temperature change
+            mc_steps - # of sweeps and data collection to perform
+            group - lattice type
+            cutoff - magnitude cutoff for lattice
+            func_list - list of function names to calculate from data (objects not strings)
+            cutoff_type - type of cutoff (default: 'm')
+            size - size of basis vectors for lattice
+            error - allowed error in calculation
+
+    return: [T, quantity_dict]. T is temperature points, quantity_dict is q a dictionary for each func_list containing a dictionary
+            of values, relaxation times, and errors
     '''
     
     # Shift cutoff to smallest multiple of 3 above current
     cutoff += 3 - (cutoff % 3)
+
+    # Batch size
+    M = int(np.rint(mc_steps**(1/3)))
+    num_batches = int(mc_steps/M)
 
     # Create lattice and graph (graph provides neighboring points)
     lattice = LatticeStructure(group=group, cutoff=cutoff, cutoff_type=cutoff_type, size=size, error=error)
     graph = lattice.periodic_graph()
     n_points = len(graph)
 
+    # Initialize configuration
     config = init(n_points)
-        
-    nt = 5         #  number of temperature points
-        
-    # the number of MC sweeps for equilibrium should be at least equal to the number of MC sweeps for equilibrium
 
-    # initialization of all variables
+    # Get temperature points
     T = np.linspace(1., 7., nt)
-    E = np.zeros(nt)
-        
-    Energies = list()
-    Energies_squared = list()
-    delEnergies = list()
-    error_list = list()
-    relaxation_times = list()
+
+    quantity_dict = dict()
 
     for t in range(nt):
         # initialize total energy and mag
@@ -112,56 +149,69 @@ def calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=
             MC_step(n_points, config, graph, beta)
 
         # Perform sweeps
-        E = list()
-        for _ in range(mcSteps):
-            MC_step(n_points, config, graph, beta)           
-            energy = total_E(config, graph)/n_points # calculate the energy at time stamp
+        quantities = list()
+        for _ in range(mc_steps):
+            MC_step(n_points, config, graph, beta)
 
-            # Add to the list of energies after each sweep
+            # Calculate each quantity
+            count = 0
+            for func in func_list:
+                quantity = func(config, graph)
+                try:
+                    quantities[count].append(quantity)
+                except IndexError:
+                    quantities.append([quantity])
+                finally:
+                    count += 1
+        
+    
+        # Add quantities to dictionary with errors and relaxation times
+        count = 0
+        for q in quantities:
+            # Estimate autocorrelation time and error
+            mean_q, rel_t, del_quant = estimate_correlation(q, mc_steps, M, num_batches, ddof=ddof)
 
-            E.append(energy)
+            # Get dict key
+            dict_label = func_list[count].__name__
 
+            # Add quantity itself
+            try:
+                quantity_dict[dict_label]["Values"].append(mean_q)
+            except KeyError:
+                quantity_dict[dict_label] = {"Values" : [mean_q]}
 
-        binned_series = list()
-        binning(E, binned_series)
+            # Add relaxation time
+            try:
+                quantity_dict[dict_label]["Relaxation times"].append(rel_t)
+            except KeyError:
+                quantity_dict[dict_label]["Relaxation times"] = [rel_t]
+            
+            # Add error
+            try:
+                quantity_dict[dict_label]["Errors"].append(del_quant)
+            except KeyError:
+                quantity_dict[dict_label]["Errors"] = [del_quant]
+        
+            count += 1
+        
 
-        errors = list()
-        for bin_list in binned_series:
-            Ml = len(bin_list)
-            if Ml == 1:
-                continue
-            avg = np.mean(bin_list)
-            summation = np.sum([(p - avg)**2 for p in bin_list])
-            bin_error = np.sqrt((1/(Ml*(Ml-1)))*summation)
-            errors.append(bin_error)
-
-        # Approximate limit
-        error = errors[-1]
-
-        # Calculate relaxation times
-        rel_t = (1/2)*((error/errors[0])**2 -1)
-        relaxation_times.append(rel_t)
-
-        # Calculate energies and get error as limit of binned errors
-        Energy = np.mean(E)
-        Energy_squared = np.mean(np.array(Energy)*np.array(Energy))
-        Energies.append(Energy)
-        Energies_squared.append(Energy_squared)
-        error_list.append(errors)
-        delEnergy = error
-        delEnergies.append(float(delEnergy))
-
-    results = [T, Energies, delEnergies, Energies_squared, relaxation_times, error_list]
+    results = [T, quantity_dict]
 
     return results
 
 
-def plots(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8)):
+def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
 
     print("Performing calculation")
-    T, Energies, delEnergies, Energies_squared, rel_times, error_list = calculation(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, error=10**(-8))
+    T, quantity_dict = calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
     print("Plotting")
-    l_list = [i for i in range(len(error_list[0]))]
+
+    Energies = quantity_dict["avg_energy"]["Values"]
+    delEnergies = quantity_dict["avg_energy"]["Errors"]
+    Energies_squared = quantity_dict["squared_E"]["Values"]
+    rel_times = quantity_dict["avg_energy"]["Relaxation times"]
+
+    print(Energies)
 
     fig, axs = plt.subplots(2, 2)
     fig.tight_layout()
@@ -173,8 +223,11 @@ def plots(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, err
     ax.errorbar(x=T, y=Energies_squared)
     ax.set_title('Energies Squared')
     ax = axs[1, 0]
-    ax.errorbar(x=l_list, y = error_list[0])
-    ax.set_title('Error for T = 1')
+    ax.errorbar(x=T, y = delEnergies)
+    ax.set_title('Error at various T')
+    ax = axs[1, 1]
+    ax.errorbar(x=T, y = rel_times)
+    ax.set_title('Relaxation times at each temperature')
 
     plt.show()
 
@@ -184,10 +237,10 @@ def plots(eq_steps, mcSteps, n_bins, group, cutoff, cutoff_type='m', size=1, err
 if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
-    cutoff = 26
-    size = 0.5
-    n_bins = 10
-    mcSteps = 2**12
-    plots(eqSteps, mcSteps, n_bins, group, cutoff=cutoff, size=size, error=10**(-8))
-
-
+    cutoff = 18
+    size = 1
+    mc_steps = 2**9
+    nt = 5
+    ddof = 1
+    func_list = [avg_energy, squared_E]
+    plots(nt, eqSteps, mc_steps, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

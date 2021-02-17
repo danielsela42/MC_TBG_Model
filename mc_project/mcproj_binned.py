@@ -240,7 +240,7 @@ if __name__ == "__main__":
     cutoff = 18
     size = 0.5
     mc_steps = 2**15
-    nt = 5
+    nt = 10
     ddof = 1
     func_list = [avg_energy, squared_E]
     plots(nt, eqSteps, mc_steps, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

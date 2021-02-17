@@ -238,8 +238,8 @@ if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
     cutoff = 18
-    size = 1
-    mc_steps = 2**9
+    size = 0.5
+    mc_steps = 2**15
     nt = 5
     ddof = 1
     func_list = [avg_energy, squared_E]

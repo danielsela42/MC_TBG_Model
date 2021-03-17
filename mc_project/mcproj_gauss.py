@@ -16,7 +16,6 @@ def init(n_points):
     return config
 
 
-
 def total_E(config, graph):
     total_energy = 0
     for i in range(len(config)):
@@ -44,12 +43,12 @@ def energy_diff(cand, curr, neighbors, config):
     return energy
 
 
-def MC_step(n_points, config, graph, beta):
+def MC_step(n_points, config, graph, sigma, beta):
     '''Monte Carlo move using Metropolis algorithm '''
     for i in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
-        cand = np.random.uniform(low=-1, high=1, size=(4, 2))
+        cand = np.random.normal(curr, sigma, size=(4, 2))
         norm = sum(sum(cand*cand))
         cand *= 1/norm
         upd = curr
@@ -102,12 +101,13 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     return mean, rel_t, error
 
 
-def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
 
     Inputs: nt - # temperature points
             eq_steps - steps to equilibriate system after temperature change
             mc_steps - # of sweeps and data collection to perform
+            sigma - standard deviation/step size for monte carlo
             group - lattice type
             cutoff - magnitude cutoff for lattice
             func_list - list of function names to calculate from data (objects not strings)
@@ -146,12 +146,12 @@ def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
         for _ in range(eq_steps):
-            MC_step(n_points, config, graph, beta)
+            MC_step(n_points, config, graph, sigma, beta)
 
         # Perform sweeps
         quantities = list()
         for _ in range(mc_steps):
-            MC_step(n_points, config, graph, beta)
+            MC_step(n_points, config, graph, sigma, beta)
 
             # Calculate each quantity
             count = 0
@@ -200,18 +200,16 @@ def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff
     return results
 
 
-def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def plots(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
 
     print("Performing calculation")
-    T, quantity_dict = calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    T, quantity_dict = calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
     print("Plotting")
 
     Energies = quantity_dict["avg_energy"]["Values"]
     delEnergies = quantity_dict["avg_energy"]["Errors"]
     Energies_squared = quantity_dict["squared_E"]["Values"]
     rel_times = quantity_dict["avg_energy"]["Relaxation times"]
-
-    print(Energies)
 
     fig, axs = plt.subplots(2, 2)
     fig.tight_layout()
@@ -237,10 +235,11 @@ def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type=
 if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
-    cutoff = 18
-    size = 0.5
+    cutoff = 9
+    size = 1
     mc_steps = 2**15
-    nt = 10
+    nt = 5
     ddof = 1
+    sigma = 0.1
     func_list = [avg_energy, squared_E]
-    plots(nt, eqSteps, mc_steps, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+    plots(nt, eqSteps, mc_steps, sigma, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

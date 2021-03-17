@@ -237,7 +237,7 @@ if __name__ == "__main__":
     cutoff = 9
     size = 1
     mc_steps = 2**15
-    nt = 5
+    nt = 10
     ddof = 1
     sigma = 0.1
     func_list = [avg_energy, squared_E]

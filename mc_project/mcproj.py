@@ -10,11 +10,9 @@ def init(n_points):
 
     # Fix phase
     for i in range(n_points):
-        config[i, 0, 1] = 0
         norm = sum(sum(config[i]*config[i]))
         config[i] *= 1/norm
     return config
-
 
 
 def total_E(config, graph):
@@ -235,8 +233,8 @@ def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type=
 if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
-    cutoff = 18
-    size = 0.5
+    cutoff = 9
+    size = 10
     mc_steps = 2**15
     nt = 10
     ddof = 1

@@ -47,7 +47,7 @@ def MC_step(n_points, config, graph, beta):
     for i in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
-        cand = np.random.uniform(low=-1, high=1, size=(4, 2))
+        cand = np.random.normal(0, 1, size=(4, 2))
         norm = sum(sum(cand*cand))
         cand *= 1/norm
         upd = curr
@@ -233,10 +233,10 @@ def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type=
 if __name__ == "__main__":
     eqSteps = 1000
     group = 'h'
-    cutoff = 18
-    size = 0.5
+    cutoff = 9
+    size = 1
     mc_steps = 2**15
-    nt = 10
+    nt = 5
     ddof = 1
     func_list = [avg_energy, squared_E]
     plots(nt, eqSteps, mc_steps, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

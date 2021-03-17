@@ -48,7 +48,7 @@ def MC_step(n_points, config, graph, sigma, beta):
     for i in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
-        cand = np.random.normal(curr, sigma, size=(4, 2))
+        cand = np.random.normal(curr, sigma)
         norm = sum(sum(cand*cand))
         cand *= 1/norm
         upd = curr

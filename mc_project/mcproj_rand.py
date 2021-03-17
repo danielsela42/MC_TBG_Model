@@ -6,11 +6,10 @@ from mc_project.lattice import LatticeStructure
 
 def init(n_points):
     # create config
-    config = np.random.uniform(low=-1.0, high=1.0, size=(n_points, 4, 2))
+    config = np.random.normal(0, 1, size=(n_points, 4, 2))
 
     # Fix phase
     for i in range(n_points):
-        config[i, 0, 1] = 0
         norm = sum(sum(config[i]*config[i]))
         config[i] *= 1/norm
     return config

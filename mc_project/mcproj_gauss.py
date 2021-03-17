@@ -10,7 +10,6 @@ def init(n_points):
 
     # Fix phase
     for i in range(n_points):
-        config[i, 0, 1] = 0
         norm = sum(sum(config[i]*config[i]))
         config[i] *= 1/norm
     return config

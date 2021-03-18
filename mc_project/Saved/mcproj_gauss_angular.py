@@ -4,6 +4,21 @@ import matplotlib.pyplot as plt
 from mc_project.lattice import LatticeStructure
 
 
+def ang_to_coord(angles):
+    coords = list()
+    coords.append(np.cos(angles[0]))
+    sines = np.sin(angles[0])
+    for i in range(1, len(angles)):
+        coords.append(sines*np.cos(angles[i]))
+        sines *= np.sin(angles[i])
+
+    coords.append(sines)
+    
+    arr_coords = np.array([[coords[2*i], coords[2*i+1]] for i in range(4)])
+
+    return arr_coords
+
+'''
 def init(n_points):
     # create config
     config = np.random.normal(0, 1, size=(n_points, 4, 2))
@@ -13,6 +28,18 @@ def init(n_points):
         norm = sum(sum(config[i]*config[i]))
         config[i] *= 1/norm
     return config
+'''
+
+def init(n_points):
+    # creat config
+    config_ang = np.random.uniform(low = 0, high = 1, size=(n_points, 7))
+    config = np.array([ang_to_coord(config_ang[i]) for i in range(n_points)])
+    '''
+    for i in range(n_points):
+        print(sum(sum(config[i]*config[i])))
+    '''
+
+    return config, config_ang
 
 
 def total_E(config, graph):
@@ -42,14 +69,16 @@ def energy_diff(cand, curr, neighbors, config):
     return energy
 
 
-def MC_step(n_points, config, graph, beta):
+def MC_step(n_points, config, config_ang, graph, beta):
     '''Monte Carlo move using Metropolis algorithm '''
     for i in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
-        cand = np.random.normal(0, 1, size=(4, 2))
-        norm = sum(sum(cand*cand))
-        cand *= 1/norm
+        curr_ang = config_ang[rand_pos]
+        cand_ang = np.random.normal(curr_ang, 1)
+        cand = ang_to_coord(cand_ang)
+        # if not sum(sum(cand*cand)) != 1:
+        #    raise Exception("non-normalized")
         upd = curr
         neighbors = graph[i][1]
         del_E = energy_diff(cand, curr, neighbors, config)
@@ -130,7 +159,7 @@ def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff
     n_points = len(graph)
 
     # Initialize configuration
-    config = init(n_points)
+    config, config_ang = init(n_points)
 
     # Get temperature points
     T = np.linspace(1., 7., nt)
@@ -144,12 +173,12 @@ def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
         for _ in range(eq_steps):
-            MC_step(n_points, config, graph, beta)
+            MC_step(n_points, config, config_ang, graph, beta)
 
         # Perform sweeps
         quantities = list()
         for _ in range(mc_steps):
-            MC_step(n_points, config, graph, beta)
+            MC_step(n_points, config, config_ang, graph, beta)
 
             # Calculate each quantity
             count = 0

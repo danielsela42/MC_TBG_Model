@@ -69,13 +69,13 @@ def energy_diff(cand, curr, neighbors, config):
     return energy
 
 
-def MC_step(n_points, config, config_ang, graph, beta):
+def MC_step(n_points, config, config_ang, graph, sigma, beta):
     '''Monte Carlo move using Metropolis algorithm '''
     for i in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
         curr_ang = config_ang[rand_pos]
-        cand_ang = np.random.normal(curr_ang, 1)
+        cand_ang = np.random.normal(curr_ang, sigma)
         cand = ang_to_coord(cand_ang)
         # if not sum(sum(cand*cand)) != 1:
         #    raise Exception("non-normalized")
@@ -129,7 +129,7 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     return mean, rel_t, error
 
 
-def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
 
     Inputs: nt - # temperature points
@@ -173,12 +173,12 @@ def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
         for _ in range(eq_steps):
-            MC_step(n_points, config, config_ang, graph, beta)
+            MC_step(n_points, config, config_ang, graph, sigma, beta)
 
         # Perform sweeps
         quantities = list()
         for _ in range(mc_steps):
-            MC_step(n_points, config, config_ang, graph, beta)
+            MC_step(n_points, config, config_ang, graph, sigma, beta)
 
             # Calculate each quantity
             count = 0
@@ -227,10 +227,10 @@ def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff
     return results
 
 
-def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def plots(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
 
     print("Performing calculation")
-    T, quantity_dict = calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    T, quantity_dict = calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
     print("Plotting")
 
     Energies = quantity_dict["avg_energy"]["Values"]
@@ -267,5 +267,6 @@ if __name__ == "__main__":
     mc_steps = 2**15
     nt = 5
     ddof = 1
+    sigma = 0.1
     func_list = [avg_energy, squared_E]
-    plots(nt, eqSteps, mc_steps, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+    plots(nt, eqSteps, mc_steps, sigma, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

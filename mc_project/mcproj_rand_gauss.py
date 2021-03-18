@@ -4,6 +4,21 @@ import matplotlib.pyplot as plt
 from mc_project.lattice import LatticeStructure
 
 
+def ang_to_coord(angles):
+    coords = list()
+    coords.append(np.cos(angles[0]))
+    sines = np.sin(angles[0])
+    for i in range(1, len(angles)):
+        coords.append(sines*np.cos(angles[i]))
+        sines *= np.sin(angles[i])
+
+    coords.append(sines)
+    
+    arr_coords = np.array([[coords[2*i], coords[2*i+1]] for i in range(4)])
+
+    return arr_coords
+
+'''
 def init(n_points):
     # create config
     config = np.random.normal(0, 1, size=(n_points, 4, 2))
@@ -13,6 +28,19 @@ def init(n_points):
         norm = sum(sum(config[i]*config[i]))
         config[i] *= 1/norm
     return config
+'''
+
+def init(n_points):
+    # creat config
+    config_ang = np.random.uniform(low = 0, high = 1, size=(n_points, 7))
+    config = np.array([ang_to_coord(config_ang[i]) for i in range(n_points)])
+    '''
+    for i in range(n_points):
+        print(sum(sum(config[i]*config[i])))
+    '''
+
+    return config, config_ang
+
 
 
 def total_E(config, graph):
@@ -131,7 +159,7 @@ def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0,
     n_points = len(graph)
 
     # Initialize configuration
-    config = init(n_points)
+    config, _ = init(n_points)
 
     # Get temperature points
     T = np.linspace(1., 7., nt)
@@ -237,7 +265,7 @@ if __name__ == "__main__":
     cutoff = 9
     size = 1
     mc_steps = 2**15
-    nt = 10
+    nt = 5
     ddof = 1
     sigma = 0.1
     func_list = [avg_energy, squared_E]

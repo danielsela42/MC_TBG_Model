@@ -267,6 +267,6 @@ if __name__ == "__main__":
     mc_steps = 2**15
     nt = 5
     ddof = 1
-    sigma = 0.1
+    sigma = 0.2
     func_list = [avg_energy, squared_E]
     plots(nt, eqSteps, mc_steps, sigma, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

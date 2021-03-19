@@ -2,23 +2,9 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from mc_project.lattice import LatticeStructure
+from mc_project import sample_vMF
 
 
-def ang_to_coord(angles):
-    coords = list()
-    coords.append(np.cos(angles[0]))
-    sines = np.sin(angles[0])
-    for i in range(1, len(angles)):
-        coords.append(sines*np.cos(angles[i]))
-        sines *= np.sin(angles[i])
-
-    coords.append(sines)
-    
-    arr_coords = np.array([[coords[2*i], coords[2*i+1]] for i in range(4)])
-
-    return arr_coords
-
-'''
 def init(n_points):
     # create config
     config = np.random.normal(0, 1, size=(n_points, 4, 2))
@@ -28,19 +14,6 @@ def init(n_points):
         norm = sum(sum(config[i]*config[i]))
         config[i] *= 1/norm
     return config
-'''
-
-def init(n_points):
-    # creat config
-    config_ang = np.random.uniform(low = 0, high = 1, size=(n_points, 7))
-    config = np.array([ang_to_coord(config_ang[i]) for i in range(n_points)])
-    '''
-    for i in range(n_points):
-        print(sum(sum(config[i]*config[i])))
-    '''
-
-    return config, config_ang
-
 
 
 def total_E(config, graph):
@@ -70,25 +43,29 @@ def energy_diff(cand, curr, neighbors, config):
     return energy
 
 
-def MC_step(n_points, config, graph, sigma, beta):
+def MC_step(n_points, config, graph, kappa, beta):
     '''Monte Carlo move using Metropolis algorithm '''
-    for i in range(n_points):
+    for _ in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
-        cand = np.random.normal(curr, sigma)
+
+        # Choose and normalize candidate
+        cand = np.reshape(sample_vMF(np.concatenate(curr, axis=None), kappa, num_samples=1), (4, 2))
         norm = sum(sum(cand*cand))
         cand *= 1/norm
+
+        # Accept or deny candidate
         upd = curr
-        neighbors = graph[i][1]
+        neighbors = graph[rand_pos][1]
         del_E = energy_diff(cand, curr, neighbors, config)
         if del_E < 0:
             upd = cand
         elif np.random.rand() < np.exp(-del_E*beta):
             upd = cand
-        config[i] = upd
+        config[rand_pos] = upd
     return config
 
-
+'''
 def binning(data, binned_series=list()):
     if not binned_series:
         binned_series.append(data)
@@ -101,7 +78,7 @@ def binning(data, binned_series=list()):
 
     binned_series.append(binned)
     binning(binned, binned_series)
-
+'''
 
 def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     ''' Calculates mean, relaxation time, and error, of a data set quantities
@@ -128,13 +105,13 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     return mean, rel_t, error
 
 
-def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
 
     Inputs: nt - # temperature points
             eq_steps - steps to equilibriate system after temperature change
             mc_steps - # of sweeps and data collection to perform
-            sigma - standard deviation/step size for monte carlo
+            kappa - standard deviation/step size for monte carlo
             group - lattice type
             cutoff - magnitude cutoff for lattice
             func_list - list of function names to calculate from data (objects not strings)
@@ -159,7 +136,7 @@ def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0,
     n_points = len(graph)
 
     # Initialize configuration
-    config, _ = init(n_points)
+    config = init(n_points)
 
     # Get temperature points
     T = np.linspace(1., 7., nt)
@@ -173,12 +150,12 @@ def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0,
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
         for _ in range(eq_steps):
-            MC_step(n_points, config, graph, sigma, beta)
+            MC_step(n_points, config, graph, kappa, beta)
 
         # Perform sweeps
         quantities = list()
         for _ in range(mc_steps):
-            MC_step(n_points, config, graph, sigma, beta)
+            MC_step(n_points, config, graph, kappa, beta)
 
             # Calculate each quantity
             count = 0
@@ -227,10 +204,10 @@ def calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0,
     return results
 
 
-def plots(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def plots(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
 
     print("Performing calculation")
-    T, quantity_dict = calculation(nt, eq_steps, mc_steps, sigma, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    T, quantity_dict = calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
     print("Plotting")
 
     Energies = quantity_dict["avg_energy"]["Values"]
@@ -267,6 +244,6 @@ if __name__ == "__main__":
     mc_steps = 2**15
     nt = 5
     ddof = 1
-    sigma = 0.2
+    kappa = 0.1
     func_list = [avg_energy, squared_E]
-    plots(nt, eqSteps, mc_steps, sigma, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

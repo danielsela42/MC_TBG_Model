@@ -214,6 +214,7 @@ def plots(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0, cutof
     rel_times = quantity_dict["avg_energy"]["Relaxation times"]
 
     fig, axs = plt.subplots(2, 2)
+    fig.suptitle("kappa = {}". format(kappa))
     fig.tight_layout()
 
     ax = axs[0, 0]
@@ -242,6 +243,16 @@ if __name__ == "__main__":
     mc_steps = 2**15
     nt = 5
     ddof = 1
-    kappa = 100
     func_list = [avg_energy, squared_E]
+
+    kappa = 50
+    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+
+    kappa = 100
+    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+
+    kappa = 500
+    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+
+    kappa = 1000
     plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

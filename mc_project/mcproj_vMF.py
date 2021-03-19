@@ -244,6 +244,6 @@ if __name__ == "__main__":
     mc_steps = 2**15
     nt = 5
     ddof = 1
-    kappa = 0.1
+    kappa = 100
     func_list = [avg_energy, squared_E]
     plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

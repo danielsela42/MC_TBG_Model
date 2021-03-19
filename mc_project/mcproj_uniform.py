@@ -11,7 +11,7 @@ def init(n_points):
 
     # Fix phase
     for i in range(n_points):
-        norm = sum(sum(config[i]*config[i]))
+        norm = np.sqrt(sum(sum(config[i]*config[i])))
         config[i] *= 1/norm
     return config
 
@@ -51,7 +51,7 @@ def MC_step(n_points, config, graph, sigma, beta):
 
         # Choose and normalize candidate
         cand = np.random.normal(0, 1, size=(4, 2))
-        norm = sum(sum(cand*cand))
+        norm = np.sqrt(sum(sum(cand*cand)))
         cand *= 1/norm
 
         # Accept or deny candidate

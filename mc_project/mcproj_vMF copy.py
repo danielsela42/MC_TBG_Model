@@ -109,7 +109,7 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
     Inputs: nt - # temperature points
             eq_steps - steps to equilibriate system after temperature change
             mc_steps - # of sweeps and data collection to perform
-            kappa - concentration parameter for vMF distribution
+            kappa - standard deviation/step size for monte carlo
             group - lattice type
             cutoff - magnitude cutoff for lattice
             func_list - list of function names to calculate from data (objects not strings)
@@ -242,6 +242,6 @@ if __name__ == "__main__":
     mc_steps = 2**15
     nt = 5
     ddof = 1
-    kappa = 100
+    kappa = 0
     func_list = [avg_energy, squared_E]
     plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

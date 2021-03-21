@@ -202,37 +202,56 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
     return results
 
 
-def plots(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def plots(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+    values = dict()
+    errors = dict()
+    rel_times = dict()
+    for kappa in kappa_list:
+        print("Performing calculation for kappa = {}".format(kappa))
+        T, quantity_dict = calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+        for k, v in quantity_dict.items():
+            try:
+                values[k].append(v["Values"])
+            except KeyError:
+                values[k] = [v["Values"]]
 
-    print("Performing calculation")
-    T, quantity_dict = calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+            try:
+                errors[k].append(v["Errors"])
+            except KeyError:
+                errors[k] = [v["Errors"]]
+
+            try:
+                rel_times[k].append(v["Relaxation times"])
+            except KeyError:
+                rel_times[k] = [v["Relaxation times"]]
+    
     print("Plotting")
 
-    Energies = quantity_dict["avg_energy"]["Values"]
-    delEnergies = quantity_dict["avg_energy"]["Errors"]
-    Energies_squared = quantity_dict["squared_E"]["Values"]
-    rel_times = quantity_dict["avg_energy"]["Relaxation times"]
+    ncols = 2
+    nrows = int(len(func_list)/2)
 
-    fig, axs = plt.subplots(2, 2)
-    fig.suptitle("kappa = {}". format(kappa))
+    fig, axs = plt.subplots(nrows, ncols)
+    fig.suptitle("Plots for kappa=" + ','.join([str(elem) for elem in kappa_list]))
     fig.tight_layout()
 
-    ax = axs[0, 0]
-    ax.errorbar(x=T, y=Energies, yerr=delEnergies)
-    ax.set_title('Energies')
-    ax = axs[0, 1]
-    ax.errorbar(x=T, y=Energies_squared)
-    ax.set_title('Energies Squared')
-    ax = axs[1, 0]
-    ax.errorbar(x=T, y = delEnergies)
-    ax.set_title('Error at various T')
-    ax = axs[1, 1]
-    ax.errorbar(x=T, y = rel_times)
-    ax.set_title('Relaxation times at each temperature')
+    count = 0
+    for row in range(nrows):
+        for col in range(ncols):
+            if count + 1 > ncols*len(func_list)/2:
+                break
+            try:
+                ax = axs[row, col]
+            except IndexError:
+                ax = axs[col]
+    
+            dict_label = func_list[count].__name__
+            ax.set_title(dict_label)
+            for i in range(len(kappa_list)):
+                ax.errorbar(x=T, y=values[dict_label][i], yerr= errors[dict_label][i], label="k={}".format(kappa_list[i]))
+            ax.legend()
+            count += 1
 
     plt.show()
-
-    print(rel_times)
 
 
 if __name__ == "__main__":
@@ -241,18 +260,10 @@ if __name__ == "__main__":
     cutoff = 9
     size = 1
     mc_steps = 2**15
+    # mc_steps = 8**3
     nt = 5
     ddof = 1
     func_list = [avg_energy, squared_E]
 
-    kappa = 0
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
-
-    kappa = 1
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
-
-    kappa = 5
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
-
-    kappa = 10
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+    kappa_list = [1, 30, 60, 90]
+    plots(nt, eqSteps, mc_steps, kappa_list, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

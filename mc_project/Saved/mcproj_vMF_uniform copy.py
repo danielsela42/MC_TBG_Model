@@ -6,8 +6,6 @@ from mc_project import sample_vMF
 
 
 def init(n_points):
-    ''' Initialize config with n_points
-    '''
     # create config
     config = np.random.normal(0, 1, size=(n_points, 4, 2))
 
@@ -19,8 +17,6 @@ def init(n_points):
 
 
 def total_E(config, graph):
-    ''' Calculate total energy of config
-    '''
     total_energy = 0
     for i in range(len(config)):
         psi = config[i]
@@ -31,20 +27,13 @@ def total_E(config, graph):
 
 
 def avg_energy(config, graph):
-    ''' Calculate average energy per site
-    '''
     return total_E(config, graph)/len(graph)
 
 def squared_E(config, graph):
-    ''' Calculate squared average energy
-    '''
     return avg_energy(config, graph)**2
 
 
 def energy_diff(cand, curr, neighbors, config):
-    ''' Calculate energy difference between candidate and current config at given
-    lattice point.
-    '''
     energy = 0
     for j, _ in neighbors:
         psi_neigh = config[j]
@@ -55,14 +44,7 @@ def energy_diff(cand, curr, neighbors, config):
 
 
 def MC_step(n_points, config, graph, kappa, beta):
-    ''' Monte Carlo step using Metropolis-Hastings Algorithm
-
-    input: n_points - # of lattice points
-           config - configuration of system to update
-           graph - lattice information containing points and neighbors
-           kappa - concentration parameter for vMF proposal density
-           beta - inverse of boltzmann constant times temperature
-    '''
+    '''Monte Carlo move using Metropolis algorithm '''
     for _ in range(n_points):
         rand_pos = np.random.randint(0, n_points)
         curr = config[rand_pos]
@@ -70,21 +52,31 @@ def MC_step(n_points, config, graph, kappa, beta):
         # Choose and normalize candidate
         cand = np.reshape(sample_vMF(np.concatenate(curr, axis=None), kappa, num_samples=1), (4, 2))
 
-        # Get neighbors
-        neighbors = graph[rand_pos][1]
-
         # Accept or deny candidate
         upd = curr
+        neighbors = graph[rand_pos][1]
         del_E = energy_diff(cand, curr, neighbors, config)
         if del_E < 0:
             upd = cand
         elif np.random.rand() < np.exp(-del_E*beta):
             upd = cand
-
-        # Update config and return
         config[rand_pos] = upd
     return config
 
+'''
+def binning(data, binned_series=list()):
+    if not binned_series:
+        binned_series.append(data)
+    if len(data) <= 2:
+        return
+    binned = list()
+    length = int(len(data)/2)
+    for i in range(length):
+        binned.append((1/2)*(data[2*i] + data[2*i+1]))
+
+    binned_series.append(binned)
+    binning(binned, binned_series)
+'''
 
 def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     ''' Calculates mean, relaxation time, and error, of a data set quantities
@@ -92,24 +84,19 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     input: quantities - list of data points for computation
            batch_size - size of batches
            num_batches - number of batches
-           ddof - divides by 1/(N-ddof) in variance calculation for data of size N
 
     returns: mean, relaxation time, error
     '''
-    # Calculate mean and variance of quantities
     mean  = np.mean(quantities)
     variance = np.var(quantities, ddof=ddof)
 
-    # Calculate mean of each batch of size batch_size
     batch_means = list()
     for i in range(num_batches):
         batch_mean = (1/batch_size)*np.sum([quantities[j] for j in range(batch_size*i, batch_size*(i+1))])
         batch_means.append(batch_mean)
 
-    # Calculate variance between batches
     batch_var = np.var(batch_means, ddof=ddof)
 
-    # Calculate relaxation/autocorrelation time and adjusted error
     rel_t = batch_size*batch_var/variance
     error = np.sqrt(variance*(1+2*rel_t)/(mc_steps))
 
@@ -122,7 +109,7 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
     Inputs: nt - # temperature points
             eq_steps - steps to equilibriate system after temperature change
             mc_steps - # of sweeps and data collection to perform
-            kappa - concentration parameter for vMF distribution
+            kappa - standard deviation/step size for monte carlo
             group - lattice type
             cutoff - magnitude cutoff for lattice
             func_list - list of function names to calculate from data (objects not strings)
@@ -215,41 +202,69 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
     return results
 
 
-def plots(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
-    ''' Plot some quantities calculated in func_list
+def plots(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
 
-    Parameters given in the function calculation
-    '''
-
-    print("Performing calculation")
-    T, quantity_dict = calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    print("Performing calculation 1")
+    T, quantity_dict1 = calculation(nt, eq_steps, mc_steps, kappa_list[0], group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    
+    print("Performing calculation 2")
+    T, quantity_dict2 = calculation(nt, eq_steps, mc_steps, kappa_list[1], group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    
+    print("Performing calculation 3")
+    T, quantity_dict3 = calculation(nt, eq_steps, mc_steps, kappa_list[2], group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    
     print("Plotting")
 
-    Energies = quantity_dict["avg_energy"]["Values"]
-    delEnergies = quantity_dict["avg_energy"]["Errors"]
-    Energies_squared = quantity_dict["squared_E"]["Values"]
-    rel_times = quantity_dict["avg_energy"]["Relaxation times"]
+    Energies1 = quantity_dict1["avg_energy"]["Values"]
+    delEnergies1 = quantity_dict1["avg_energy"]["Errors"]
+    Energies_squared1 = quantity_dict1["squared_E"]["Values"]
+    rel_times1 = quantity_dict1["avg_energy"]["Relaxation times"]
+
+    Energies2 = quantity_dict2["avg_energy"]["Values"]
+    delEnergies2 = quantity_dict2["avg_energy"]["Errors"]
+    Energies_squared2 = quantity_dict2["squared_E"]["Values"]
+    rel_times2 = quantity_dict2["avg_energy"]["Relaxation times"]
+
+    Energies3 = quantity_dict3["avg_energy"]["Values"]
+    delEnergies3 = quantity_dict3["avg_energy"]["Errors"]
+    Energies_squared3 = quantity_dict3["squared_E"]["Values"]
+    rel_times3 = quantity_dict3["avg_energy"]["Relaxation times"]
+
+    print(Energies1[0], Energies2[0], Energies3[0])
 
     fig, axs = plt.subplots(2, 2)
-    fig.suptitle("kappa = {}". format(kappa))
+    fig.suptitle("Plots for kappa = {},{},{}". format(kappa_list[0], kappa_list[1], kappa_list[2]))
     fig.tight_layout()
 
-    ax = axs[0, 0]
-    ax.errorbar(x=T, y=Energies, yerr=delEnergies)
-    ax.set_title('Energies')
-    ax = axs[0, 1]
-    ax.errorbar(x=T, y=Energies_squared)
-    ax.set_title('Energies Squared')
-    ax = axs[1, 0]
-    ax.errorbar(x=T, y = delEnergies)
-    ax.set_title('Error at various T')
-    ax = axs[1, 1]
-    ax.errorbar(x=T, y = rel_times)
-    ax.set_title('Relaxation times at each temperature')
+    ax1 = axs[0, 0]
+    ax1.errorbar(x=T, y=Energies1, yerr=delEnergies1, label="k=1")
+    ax1.errorbar(x=T, y=Energies2, yerr=delEnergies2, label='k=10')
+    ax1.errorbar(x=T, y=Energies3, yerr=delEnergies3, label='k=20')
+    ax1.set_title('Energies')
+    ax1.legend(loc = "lower right")
+
+    ax2 = axs[0, 1]
+    ax2.errorbar(x=T, y=Energies_squared1, label="k=1")
+    ax2.errorbar(x=T, y=Energies_squared2, label='k=10')
+    ax2.errorbar(x=T, y=Energies_squared3, label='k=20')
+    ax2.set_title('Energies Squared')
+    ax1.legend(loc = "lower right")
+
+    ax3 = axs[1, 0]
+    ax3.errorbar(x=T, y = delEnergies1, label="k=1")
+    ax3.errorbar(x=T, y = delEnergies2, label='k=10')
+    ax3.errorbar(x=T, y = delEnergies3, label='k=20')
+    ax3.set_title('Error at various T')
+    ax1.legend(loc = "upper right")
+
+    ax4 = axs[1, 1]
+    ax4.errorbar(x=T, y = rel_times1, label="k=1")
+    ax4.errorbar(x=T, y = rel_times2, label='k=10')
+    ax4.errorbar(x=T, y = rel_times3, label='k=20')
+    ax4.set_title('Relaxation times at each temperature')
+    ax1.legend(loc = "upper right")
 
     plt.show()
-
-    print(rel_times)
 
 
 if __name__ == "__main__":
@@ -258,18 +273,10 @@ if __name__ == "__main__":
     cutoff = 9
     size = 1
     mc_steps = 2**15
+    mc_steps = 1000
     nt = 5
     ddof = 1
     func_list = [avg_energy, squared_E]
 
-    kappa = 50
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
-
-    kappa = 100
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
-
-    kappa = 500
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
-
-    kappa = 1000
-    plots(nt, eqSteps, mc_steps, kappa, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+    kappa_list = [1, 10, 20]
+    plots(nt, eqSteps, mc_steps, kappa_list, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

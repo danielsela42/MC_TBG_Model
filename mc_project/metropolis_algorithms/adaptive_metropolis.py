@@ -1,8 +1,8 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from mc_project.lattice import LatticeStructure
-from mc_project import sample_vMF
+from mc_project.utilities import LatticeStructure
+from mc_project.utilities import sample_vMF
 
 
 def init(n_points):
@@ -43,7 +43,7 @@ def energy_diff(cand, curr, neighbors, config):
     return energy
 
 
-def MC_step(n_points, config, graph, kappa, beta):
+def MC_step(n_points, config, graph, kappa, beta, n_accepted_list):
     '''Monte Carlo move using Metropolis algorithm '''
     for _ in range(n_points):
         rand_pos = np.random.randint(0, n_points)
@@ -58,8 +58,10 @@ def MC_step(n_points, config, graph, kappa, beta):
         del_E = energy_diff(cand, curr, neighbors, config)
         if del_E < 0:
             upd = cand
+            n_accepted_list[0] += 1
         elif np.random.rand() < np.exp(-del_E*beta):
             upd = cand
+            n_accepted_list[0] += 1
         config[rand_pos] = upd
     return config
 
@@ -103,7 +105,7 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     return mean, rel_t, error
 
 
-def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
 
     Inputs: nt - # temperature points
@@ -141,19 +143,30 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
 
     quantity_dict = dict()
 
+    acceptance_rates =list()
+    mc_total = n_points*mc_steps
+
+    kappa_label = 0
     for t in range(nt):
-        # initialize total energy and mag
+        kappa = kappa_list[kappa_label]
+        # initialize temperature
         beta = 1./T[t]
 
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
+        n_accepted_list = [0]
         for _ in range(eq_steps):
-            MC_step(n_points, config, graph, kappa, beta)
+            MC_step(n_points, config, graph, kappa, beta, n_accepted_list)
+
+        n_accepted = n_accepted_list[0]
+        # print(n_accepted/(eq_steps*n_points))
+
 
         # Perform sweeps
         quantities = list()
+        n_accepted_list = [0]
         for _ in range(mc_steps):
-            MC_step(n_points, config, graph, kappa, beta)
+            MC_step(n_points, config, graph, kappa, beta, n_accepted_list)
 
             # Calculate each quantity
             count = 0
@@ -165,6 +178,11 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
                     quantities.append([quantity])
                 finally:
                     count += 1
+
+        n_accepted = n_accepted_list[0]
+        acceptance_rate = n_accepted/mc_total
+        acceptance_rates.append(acceptance_rate)
+        print(acceptance_rate)
         
     
         # Add quantities to dictionary with errors and relaxation times
@@ -196,62 +214,44 @@ def calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=0,
         
             count += 1
         
+        kappa_label += 1
+        
 
-    results = [T, quantity_dict]
+    results = [T, quantity_dict, acceptance_rates]
 
     return results
 
 
 def plots(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
-    values = dict()
-    errors = dict()
-    rel_times = dict()
-    for kappa in kappa_list:
-        print("Performing calculation for kappa = {}".format(kappa))
-        T, quantity_dict = calculation(nt, eq_steps, mc_steps, kappa, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
-        for k, v in quantity_dict.items():
-            try:
-                values[k].append(v["Values"])
-            except KeyError:
-                values[k] = [v["Values"]]
-
-            try:
-                errors[k].append(v["Errors"])
-            except KeyError:
-                errors[k] = [v["Errors"]]
-
-            try:
-                rel_times[k].append(v["Relaxation times"])
-            except KeyError:
-                rel_times[k] = [v["Relaxation times"]]
-    
+    print("Performing calculation")
+    T, quantity_dict, _ = calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
     print("Plotting")
 
-    ncols = 2
-    nrows = int(len(func_list)/2)
+    Energies = quantity_dict["avg_energy"]["Values"]
+    delEnergies = quantity_dict["avg_energy"]["Errors"]
+    Energies_squared = quantity_dict["squared_E"]["Values"]
+    rel_times = quantity_dict["avg_energy"]["Relaxation times"]
 
-    fig, axs = plt.subplots(nrows, ncols)
-    fig.suptitle("Plots for kappa=" + ','.join([str(elem) for elem in kappa_list]))
+    fig, axs = plt.subplots(2, 2)
+    fig.suptitle("Metropolis Plots")
     fig.tight_layout()
 
-    count = 0
-    for row in range(nrows):
-        for col in range(ncols):
-            if count + 1 > ncols*len(func_list)/2:
-                break
-            try:
-                ax = axs[row, col]
-            except IndexError:
-                ax = axs[col]
-    
-            dict_label = func_list[count].__name__
-            ax.set_title(dict_label)
-            for i in range(len(kappa_list)):
-                ax.errorbar(x=T, y=values[dict_label][i], yerr= errors[dict_label][i], label="k={}".format(kappa_list[i]))
-            ax.legend()
-            count += 1
+    ax = axs[0, 0]
+    ax.errorbar(x=T, y=Energies, yerr=delEnergies)
+    ax.set_title('Energies')
+    ax = axs[0, 1]
+    ax.errorbar(x=T, y=Energies_squared)
+    ax.set_title('Energies Squared')
+    ax = axs[1, 0]
+    ax.errorbar(x=T, y = delEnergies)
+    ax.set_title('Error at various T')
+    ax = axs[1, 1]
+    ax.errorbar(x=T, y = rel_times)
+    ax.set_title('Relaxation times at each temperature')
 
     plt.show()
+
+    print(rel_times)
 
 
 if __name__ == "__main__":
@@ -259,11 +259,11 @@ if __name__ == "__main__":
     group = 'h'
     cutoff = 9
     size = 1
-    mc_steps = 2**15
-    # mc_steps = 8**3
+    # mc_steps = 2**15
+    mc_steps = 8**3
     nt = 5
     ddof = 1
     func_list = [avg_energy, squared_E]
 
-    kappa_list = [1, 30, 60, 90]
+    kappa_list = [0.3, -85, -350, -450, -550]
     plots(nt, eqSteps, mc_steps, kappa_list, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from mc_project.lattice import LatticeStructure
+from mc_project.utilities import LatticeStructure
 
 
 def init(n_points):

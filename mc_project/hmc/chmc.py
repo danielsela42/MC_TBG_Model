@@ -2,6 +2,7 @@
 '''
 
 import numpy as np
+import scipy as sp
 
 def p0_sampler(q0, C, M, q_len):
     # Pick initial unconstrained momentum
@@ -12,7 +13,7 @@ def p0_sampler(q0, C, M, q_len):
     return p0_i
 
 
-def rattle_int(q0, p0, h, L, guidance_H, C):
+def rattle_int(q0, p0, h, guidance_H, C):
     #TODO: RATTLE integrator
     return p0, q0
 
@@ -34,7 +35,17 @@ def hmc_step(beta, q0, q_len, M, h, L, acceptance_H, guidance_H, C):
     p0 = p0_sampler(q0, C, M, q_len)
 
     # Evolve via Hamilton's equation using RATTLE integrator
-    pL, qL = rattle_int(q0, p0, h, L, guidance_H, C)
+    p_list = [p0]
+    q_list = [q0]
+    for _ in range(L):
+        p = p_list[-1]
+        q = q_list[-1]
+        p1, q1 = rattle_int(p, q, h, guidance_H, C)
+        p_list.append(p1)
+        q_list.append(q1)
+
+    pL = p_list[-1]
+    qL = q_list[-1]
 
     # Randomly pick number in [0, 1)
     u = np.random.rand()

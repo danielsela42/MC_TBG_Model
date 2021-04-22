@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import multiprocessing as mp
 import matplotlib.pyplot as plt
 from mc_project.utilities import LatticeStructure
 from mc_project.utilities import sample_vMF
@@ -56,7 +57,7 @@ def energy_diff(cand, curr, config):
     return energy
 
 
-def MC_step(n_points, config, graph, kappa, beta, n_accepted_list):
+def MC_step(n_points, config, graph, beta, n_accepted_list):
     '''Monte Carlo move using Metropolis algorithm '''
     for _ in range(n_points):
         rand_pos = np.random.randint(0, n_points)
@@ -81,20 +82,6 @@ def MC_step(n_points, config, graph, kappa, beta, n_accepted_list):
         config[rand_pos] = upd
     return config
 
-'''
-def binning(data, binned_series=list()):
-    if not binned_series:
-        binned_series.append(data)
-    if len(data) <= 2:
-        return
-    binned = list()
-    length = int(len(data)/2)
-    for i in range(length):
-        binned.append((1/2)*(data[2*i] + data[2*i+1]))
-
-    binned_series.append(binned)
-    binning(binned, binned_series)
-'''
 
 def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     ''' Calculates mean, relaxation time, and error, of a data set quantities
@@ -120,6 +107,90 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
 
     return mean, rel_t, error
 
+
+def mcmc_sampling(arg):
+    eq_steps, mc_steps, beta, n_points, graph, n_accepted_list = arg
+
+    # Initialize configuration
+    config = init(n_points)
+
+    configs = list()
+
+    # evolve the system to equilibrium
+    n_accepted_list = [0]
+    for _ in range(eq_steps):
+        MC_step(n_points, config, graph, beta, n_accepted_list)
+
+    # Perform sweeps
+    n_accepted_list = [0]
+    for _ in range(mc_steps):
+        MC_step(n_points, config, graph, beta, n_accepted_list)
+        configs.append(config)
+    n_accepted = n_accepted_list[0]
+
+    return configs, n_accepted/(eq_steps*n_points)
+
+
+def multi_chains(arg_list):
+    chain = list()
+    for arg in arg_list:
+        n_points = arg[3]
+        config, _ = mcmc_sampling(arg)
+        reshaped_config = np.array(config).reshape(n_points*8)
+        chain.append(reshaped_config)
+    return chain
+
+
+def verify_convergence(n_processes, n_chains, eq_steps, mc_steps, beta, n_points, graph, n_accepted_list):
+    arg = (eq_steps, mc_steps, beta, n_points, graph, n_accepted_list)
+
+    args_list = [list() for i in range(n_processes)]
+
+    for i in range(n_chains):
+        args_list[i % n_processes].append(arg)
+    
+    print("Creating process pool")
+
+    # Create pool
+    pool = mp.Pool(processes=n_processes)
+    results = pool.map_async(mcmc_sampling, args_list)
+    pool.close() # Close pool
+    print("Process pool closed")
+    pool.join() # Join pools
+    print("Pools joined")
+
+    # Sort results
+    chains = list()
+    for res in results.get():
+        chains.append(res)
+    
+    parallel_chains = np.array(chains)
+    coords_chains = np.array([np.transpose(chains) for chains in parallel_chains])
+    chain_coord_means = np.array([[np.mean(coord_set[i]) for i in range(n_points*8)] for coord_set in coords_chains])
+    overall_mean = np.array([np.mean(np.transpose(chain_coord_means)[k]) for k in range(n_points*8)])
+    
+    between_chain_covar = np.zeros((n_points*8, n_points*8))
+    within_chain_covar = np.zeros((n_points*8, n_points*8))
+    for i in range(n_points*8):
+        for j in range(n_points*8):
+            between_chain_covar[i, j] = (1/(n_chains-1)) * np.sum([(means[i] - overall_mean[i])(means[j] - overall_mean[j]) for means in chain_coord_means])
+            for k in range(n_chains):
+                for p in range(mc_steps):
+                    within_chain_covar[i, j] += (parallel_chains[k, p, i] - chain_coord_means[k, p])(parallel_chains[k, p, j] - chain_coord_means[k, p])/(n_chains*(mc_steps - 1))
+
+    covar = ((mc_steps - 1)/mc_steps)*within_chain_covar + between_chain_covar
+    w_inv = np.linalg.inv(within_chain_covar)
+    eigen_matr = np.dot(w_inv, covar)/mc_steps
+
+    lambda1 = np.amax(np.linalg.eigvals(eigen_matr))
+
+    R = (mc_steps - 1)/mc_steps + (1 + 1/n_chains)*lambda1
+
+    print(R)
+    if abs(R - 1) < 0.1:
+        return True
+    else:
+        return False 
 
 def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
@@ -171,13 +242,12 @@ def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, dd
 
         # initialize temperature
         beta = beta_T[t]
-        kappa = kappa_list[t]
 
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
         n_accepted_list = [0]
         for _ in range(eq_steps):
-            MC_step(n_points, config, graph, kappa, beta, n_accepted_list)
+            MC_step(n_points, config, graph, beta, n_accepted_list)
 
         n_accepted = n_accepted_list[0]
         print(n_accepted/(eq_steps*n_points))
@@ -187,7 +257,7 @@ def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, dd
         quantities = list()
         n_accepted_list = [0]
         for _ in range(mc_steps):
-            MC_step(n_points, config, graph, kappa, beta, n_accepted_list)
+            MC_step(n_points, config, graph, beta, n_accepted_list)
             configs_t.append(config)
 
             # Calculate each quantity

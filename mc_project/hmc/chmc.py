@@ -5,6 +5,7 @@ import numpy as np
 from scipy import optimize
 import matplotlib.pyplot as plt
 from mc_project.utilities import LatticeStructure
+import time
 
 
 def energy(q, n_points, graph):
@@ -24,7 +25,7 @@ def mass_inv(q_len, mass):
     inv = np.zeros((q_len, q_len))
     for i in range(q_len):
         inv[i, i] = 1/mass[i, i]
-    return mass_inv
+    return inv
 
 def constraints(q, n_points):
     return np.array([np.dot(q[8*i:8*i+9], q[8*i:8*i+9]) for i in range(n_points)])
@@ -32,7 +33,7 @@ def constraints(q, n_points):
 def C(q, n_points):
     F = np.zeros((n_points, 8*n_points))
     for i in range(n_points):
-        F[i][i:i+9] = 2*q[8*i:8*i+9]
+        F[i][8*i:8*i+9] = 2*q[8*i:8*i+9]
     return F
 
 def C_transposed(q, Cq):
@@ -43,14 +44,14 @@ def acceptance_H(beta, p, q, q_len, n_points, graph):
     mass = mass_matr(q)
     return 0.5*np.dot(p, np.dot(mass_inv(q_len, mass), p)) + 0.5*np.log(np.linalg.norm(mass)) + beta*energy(q, n_points, graph)
 
-def guidance_H(p, q):
-    return
+def guidance_H(beta, p, q, q_len, n_points, graph):
+    return acceptance_H(beta, p, q, q_len, n_points, graph)
 
-def gH_p(p, q):
-    return
+def gH_p(m_inv, p):
+    return np.dot(m_inv, p)
 
 def gH_q(p, q):
-    return
+    return 0
 
 
 def p0_sampler(n_points, q0, q_len):
@@ -64,42 +65,42 @@ def p0_sampler(n_points, q0, q_len):
     p0_proj = np.zeros(q_len)
 
     for i in range(n_points):
-        p0_i = p0_initial[i:i+9]
-        s = prod[i][i:i+9]
+        p0_i = p0_initial[8*i:8*i+9]
+        s = prod[i][8*i:8*i+9]
         s_sq_mag = sum(s*s)
         s_inv_sq = 1/s_sq_mag
         proj = p0_i - s_inv_sq * np.dot(s, p0_i)
-        p0_proj[i:i+1] = proj
+        p0_proj[8*i:8*i+9] = proj
 
     return p0_proj
 
 
 def rattle_eqs_1(n_points, q_len, q0, p0, h):
     def F(x):
-        lamb = x[0]
-        q1 = x[1:(q_len+1)]
-        phalf = x[(q_len+1):]
+        q1 = x[0:q_len]
+        phalf = x[(q_len):(2*q_len)]
+        lamb = x[(2*q_len):]
         Cq0 = C(q0, n_points)
-        F1 = phalf  - p0 +(h/2)*(gH_q(phalf, q0) + C_transposed(q0, Cq0)*lamb)
-        F2 = q1 - q0 - (h/2)*(gH_p(phalf, q0) + gH_p(phalf, q1))
+        F1 = phalf  - p0 +(h/2)*(gH_q(phalf, q0) + np.dot(C_transposed(q0, Cq0), lamb))
+        F2 = q1 - q0 - (h/2)*(gH_p(mass_inv(q_len, mass_matr(phalf)), phalf) + gH_p(phalf, q1))
         F3 = constraints(q1, n_points)
-        result = np.concatenate(F1, F2, F3)
+        result = np.concatenate((F1, F2, F3))
         return result
     return F
 
-def rattle_eqs_2(n_points, q1, phalf, q0, h):
+def rattle_eqs_2(n_points, q_len, q1, phalf, q0, h, m_inv):
     def F(x):
-        mu = x[0]
-        p1 = x[1:(size+1)]
+        p1 = x[0:q_len]
+        mu = x[q_len:]
         Cq0 = C(q0, n_points)
-        F1 = p1  - phalf +(h/2)*(gH_q(phalf, q0) + C_transposed(q0, Cq0)*mu)
-        F2 = C(q1, n_points)*gH_p(p1, q1)
-        result = np.concatenate(F1, F2)
+        F1 = p1  - phalf +(h/2)*(gH_q(phalf, q1) + C_transposed(q0, Cq0)*mu)
+        F2 = np.dot(C(q1, n_points), gH_p(m_inv, p1))
+        result = np.concatenate((F1, F2))
         return result
     return F
 
 
-def hmc_step(lattice_size, beta, q0, q_len, M, M_inv, h, L, acceptance_H, guidance_H, gH_p, gH_q, constraints, C, C_transposed, error):
+def hmc_step(lattice_size, beta, q0, q_len, h, L, graph, error):
     ''' CMHMC step
 
     input: beta - 1/T unitless
@@ -123,22 +124,37 @@ def hmc_step(lattice_size, beta, q0, q_len, M, M_inv, h, L, acceptance_H, guidan
         q = q_list[-1]
 
         # Solve first set of equations
-        guess1 = np.zeros(2*q_len + 1)
+        guess1 = np.zeros(2*q_len+lattice_size)
+        guess1[0:q_len] = q
+        guess1[q_len:2*q_len] = p
+        print("beginning first eq")
+        t0 = time.time()
         F1 = rattle_eqs_1(lattice_size, q_len, q, p, h)
         x1 = optimize.newton_krylov(F1, guess1)
+        t1 = time.time()
+        print("Sovled first in ", t1 - t0)
+
+        # Get results
+        q1 = x1[0:q_len]
+        phalf = x1[(q_len):(2*q_len)]
 
         # Solver second set
-        guess2 = guess1 = np.zeros(2*q_len + 1)
-        F2 = rattle_eqs_2(lattice_size, q_len, q, p, h)
+        guess2 = np.zeros(q_len+lattice_size)
+        guess2[0:q_len] = phalf
+        m_inv = mass_inv(q_len, mass_matr(phalf))
+        t0 = time.time()
+        F2 = rattle_eqs_2(lattice_size, q_len, q1, phalf, h, q0, m_inv)
         x2 = optimize.newton_krylov(F2, guess2)
+        t1 = time.time()
+
+        print("Sovled second in ", t1 - t0)
 
         # Verify results
         if abs(F1(x1)) < error or abs(F2(x2)) < error:
             raise Exception("ERROR: Non-convergent solutions to Hamilton's equation at step {}.".format(i))
 
         # Get desired results
-        q1 = x1[1:q_len+1]
-        p1 = x2[1:q_len+1]
+        p1 = x2[0:q_len]
         p_list.append(p1)
         q_list.append(q1)
 
@@ -150,7 +166,7 @@ def hmc_step(lattice_size, beta, q0, q_len, M, M_inv, h, L, acceptance_H, guidan
 
     # Acceptance of proposal
     q_upd = q0
-    if u <= np.min(1, np.exp(acceptance_H(p0, q0) - acceptance_H(pL, qL))):
+    if u <= np.min(1, np.exp(acceptance_H(beta, p0, q0, q_len, lattice_size, graph) - acceptance_H(beta, pL, qL, q_len, lattice_size, graph))):
         q_upd = qL
 
     return q_upd
@@ -233,7 +249,7 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     return mean, rel_t, error
 
 
-def calculation(nt, eq_steps, mc_steps, step_size, L, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(nt, eq_steps, mc_steps, step_size, L, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-3)):
     ''' Perform Monte Carlo calculation for the model
 
     Inputs: nt - # temperature points
@@ -286,7 +302,7 @@ def calculation(nt, eq_steps, mc_steps, step_size, L, group, cutoff, func_list, 
         # evolve the system to equilibrium
         n_accepted_list = [0]
         for _ in range(eq_steps):
-            q = hmc_step(n_points, beta, q0, q_len, mass_matr, mass_inv, step_size, L, acceptance_H, guidance_H, gH_p, gH_q, constraints, C, C_transposed, error)
+            q = hmc_step(n_points, beta, q0, q_len, step_size, L, graph, error)
 
         n_accepted = n_accepted_list[0]
         print(n_accepted/(eq_steps*n_points))
@@ -296,7 +312,7 @@ def calculation(nt, eq_steps, mc_steps, step_size, L, group, cutoff, func_list, 
         quantities = list()
         n_accepted_list = [0]
         for _ in range(mc_steps):
-            q = hmc_step(n_points, beta, q, q_len, mass_matr, mass_inv, step_size, L, acceptance_H, guidance_H, gH_p, gH_q, constraints, C, C_transposed, error)
+            q = hmc_step(n_points, beta, q, q_len, step_size, L, graph, error)
 
             # Calculate each quantity
             count = 0

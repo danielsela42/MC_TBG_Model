@@ -7,9 +7,10 @@ from mc_project.utilities import sample_vMF
 
 
 def one_config_avg(config):
-    field_average = np.mean(config, axis=0)
-    return [np.linalg.norm(field_average[i]) for i in range(4)]
+    field_average = np.mean(abs(config), axis=0)
+    return [np.linalg.norm(field_average[i])**2 for i in range(4)]
 
+'''
 def average_comp_mag(configs):
     avgs = list()
     for config in configs:
@@ -19,7 +20,31 @@ def average_comp_mag(configs):
                 avgs[i].append(config_avg[i])
             except IndexError:
                 avgs.append([config_avg[i]])
+    print(np.sum([np.mean(avgs[i]) for i in range(4)]))
     return [np.mean(avgs[i]) for i in range(4)]
+'''
+def average_comp_mag(configs):
+    avg_Ap = list()
+    avg_Am = list()
+    avg_Bp = list()
+    avg_Bm = list()
+    for config in configs:
+        Ap = list()
+        Am = list()
+        Bp = list()
+        Bm = list()
+        for sample in config:
+            Ap.append(sample[0][0]**2 + sample[0][1]**2)
+            Am.append(sample[1][0]**2 + sample[1][1]**2)
+            Bp.append(sample[2][0]**2 + sample[2][1]**2)
+            Bm.append(sample[3][0]**2 + sample[3][1]**2)
+        avg_Ap.extend(Ap)
+        avg_Am.extend(Am)
+        avg_Bp.extend(Bp)
+        avg_Bm.extend(Bm)
+    print(np.sum([np.mean(avg_Ap), np.mean(avg_Am), np.mean(avg_Bp), np.mean(avg_Bm)]))
+    return [np.mean(avg_Ap), np.mean(avg_Am), np.mean(avg_Bp), np.mean(avg_Bm)]
+
 
 
 def init(n_points):
@@ -59,8 +84,9 @@ def energy_diff(cand, curr, config):
 
 def MC_step(n_points, config, graph, beta, n_accepted_list):
     '''Monte Carlo move using Metropolis algorithm '''
-    for _ in range(n_points):
-        rand_pos = np.random.randint(0, n_points)
+    for i in range(n_points):
+        # rand_pos = np.random.randint(0, n_points)
+        rand_pos = i
         curr = config[rand_pos]
 
         # Choose and normalize candidate
@@ -69,6 +95,29 @@ def MC_step(n_points, config, graph, beta, n_accepted_list):
         norm = np.sqrt(np.sum(np.sum(cand*cand)))
         inv_norm = 1/norm
         cand *= inv_norm
+
+        # Accept or deny candidate
+        upd = curr
+        del_E = energy_diff(cand, curr, config)
+        if del_E < 0:
+            upd = cand
+            n_accepted_list[0] += 1
+        elif np.random.rand() < np.exp(-del_E*beta):
+            upd = cand
+            n_accepted_list[0] += 1
+        config[rand_pos] = upd
+    return config
+
+
+def MC_step_vMF(n_points, config, graph, beta, kappa, n_accepted_list):
+    '''Monte Carlo move using Metropolis algorithm '''
+    for i in range(n_points):
+        # rand_pos = np.random.randint(0, n_points)
+        rand_pos = i
+        curr = config[rand_pos]
+
+        # Choose and normalize candidate
+        cand = np.reshape(sample_vMF(np.concatenate(curr, axis=None), kappa, num_samples=1), (4, 2))
 
         # Accept or deny candidate
         upd = curr
@@ -103,13 +152,13 @@ def estimate_correlation(quantities, mc_steps, batch_size, num_batches, ddof=0):
     batch_var = np.var(batch_means, ddof=ddof)
 
     rel_t = batch_size*batch_var/variance
+    # print(rel_t, batch_size, batch_var, variance)
     error = np.sqrt(variance*(1+2*rel_t)/(mc_steps))
 
     return mean, rel_t, error
 
 
-def mcmc_sampling(arg):
-    eq_steps, mc_steps, beta, n_points, graph, n_accepted_list = arg
+def mcmc_sampling(eq_steps, mc_steps, beta, n_points, graph):
 
     # Initialize configuration
     config = init(n_points)
@@ -125,24 +174,63 @@ def mcmc_sampling(arg):
     n_accepted_list = [0]
     for _ in range(mc_steps):
         MC_step(n_points, config, graph, beta, n_accepted_list)
-        configs.append(config)
+        configs.append(config.copy())
     n_accepted = n_accepted_list[0]
 
-    return configs, n_accepted/(eq_steps*n_points)
+    return configs, n_accepted/(mc_steps*n_points)
 
 
-def multi_chains(arg_list):
+def mcmc_sampling_vMF(eq_steps, mc_steps, beta, kappa, n_points, graph):
+
+    # Initialize configuration
+    config = init(n_points)
+
+    configs = list()
+
+    # evolve the system to equilibrium
+    n_accepted_list = [0]
+    for _ in range(eq_steps):
+        MC_step_vMF(n_points, config, graph, beta, kappa, n_accepted_list)
+
+    # Perform sweeps
+    n_accepted_list = [0]
+    for _ in range(mc_steps):
+        MC_step_vMF(n_points, config, graph, beta, kappa, n_accepted_list)
+        configs.append(config.copy())
+    n_accepted = n_accepted_list[0]
+
+    return configs, n_accepted/(mc_steps*n_points)
+
+
+def burn_in(arg):
+    eq_steps, beta, n_points, graph = arg
+
+    # Initialize configuration
+    config = init(n_points)
+
     chain = list()
-    for arg in arg_list:
-        n_points = arg[3]
-        config, _ = mcmc_sampling(arg)
-        reshaped_config = np.array(config).reshape(n_points*8)
-        chain.append(reshaped_config)
+
+    # evolve the system to equilibrium
+    n_accepted_list = [0]
+    for _ in range(eq_steps):
+        config = MC_step(n_points, config, graph, beta, n_accepted_list)
+        chain.append(config.copy())
     return chain
 
 
-def verify_convergence(n_processes, n_chains, eq_steps, mc_steps, beta, n_points, graph, n_accepted_list):
-    arg = (eq_steps, mc_steps, beta, n_points, graph, n_accepted_list)
+def multi_chains(arg_list):
+    chains = list()
+    for arg in arg_list:
+        n_points = arg[2]
+        eq_steps = arg[0]
+        chain = burn_in(arg)
+        reshaped_config = np.array(chain).reshape((eq_steps, n_points*8))
+        chains.append(reshaped_config)
+    return chains
+
+
+def verify_convergence(n_processes, n_chains, eq_steps, beta, n_points, graph):
+    arg = (eq_steps, beta, n_points, graph)
 
     args_list = [list() for i in range(n_processes)]
 
@@ -153,46 +241,59 @@ def verify_convergence(n_processes, n_chains, eq_steps, mc_steps, beta, n_points
 
     # Create pool
     pool = mp.Pool(processes=n_processes)
-    results = pool.map_async(mcmc_sampling, args_list)
+    results = pool.map_async(multi_chains, args_list)
     pool.close() # Close pool
     print("Process pool closed")
     pool.join() # Join pools
     print("Pools joined")
 
-    # Sort results
+    # Get results
     chains = list()
     for res in results.get():
-        chains.append(res)
+        chains.extend(res)
+
+    print("got results")
     
+    # Get colleciton of chains
     parallel_chains = np.array(chains)
-    coords_chains = np.array([np.transpose(chains) for chains in parallel_chains])
+    # Get collection of coordinates in each chain
+    coords_chains = np.array([np.transpose(chain) for chain in parallel_chains])
+    # Get the average of each coordinate per chain
     chain_coord_means = np.array([[np.mean(coord_set[i]) for i in range(n_points*8)] for coord_set in coords_chains])
+    # Get the overall mean of each coordinate
     overall_mean = np.array([np.mean(np.transpose(chain_coord_means)[k]) for k in range(n_points*8)])
-    
+
+    print("Getting covariance matrices")
+    #Initialize 
     between_chain_covar = np.zeros((n_points*8, n_points*8))
     within_chain_covar = np.zeros((n_points*8, n_points*8))
     for i in range(n_points*8):
         for j in range(n_points*8):
-            between_chain_covar[i, j] = (1/(n_chains-1)) * np.sum([(means[i] - overall_mean[i])(means[j] - overall_mean[j]) for means in chain_coord_means])
-            for k in range(n_chains):
-                for p in range(mc_steps):
-                    within_chain_covar[i, j] += (parallel_chains[k, p, i] - chain_coord_means[k, p])(parallel_chains[k, p, j] - chain_coord_means[k, p])/(n_chains*(mc_steps - 1))
+            if i > j: continue
+            between_chain_covar[i, j] = (1/(n_chains-1)) * np.sum([(means[i] - overall_mean[i])*(means[j] - overall_mean[j]) for means in chain_coord_means])
+            within_arr = [np.sum((parallel_chains[k, :, i] - chain_coord_means[k, i])*(parallel_chains[k, :, j] - chain_coord_means[k, j])/(n_chains*(mc_steps - 1))) for k in range(n_chains)]
+            within_chain_covar[i, j] = np.sum(within_arr)
+            if i < j:
+                between_chain_covar[j, i] = between_chain_covar[i, j]
+                within_chain_covar[j, i] = within_chain_covar[i, j]
 
+    print("Calculating R matrix")
     covar = ((mc_steps - 1)/mc_steps)*within_chain_covar + between_chain_covar
     w_inv = np.linalg.inv(within_chain_covar)
     eigen_matr = np.dot(w_inv, covar)/mc_steps
-
+    
+    print("Getting eigenvalue")
     lambda1 = np.amax(np.linalg.eigvals(eigen_matr))
 
     R = (mc_steps - 1)/mc_steps + (1 + 1/n_chains)*lambda1
 
-    print(R)
-    if abs(R - 1) < 0.1:
+    print("R value", R)
+    if R.real - 1 < 0.1 and abs(R.imag) < 0.01:
         return True
     else:
         return False 
 
-def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, kappa_list=list(), n_processes=12, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     ''' Perform Monte Carlo calculation for the model
 
     Inputs: nt - # temperature points
@@ -209,6 +310,8 @@ def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, dd
     return: [T, quantity_dict]. T is temperature points, quantity_dict is q a dictionary for each func_list containing a dictionary
             of values, relaxation times, and errors
     '''
+    # Number of chains to test convergence
+    # n_chains = 12
     
     # Shift cutoff to smallest multiple of 3 above current
     cutoff += 3 - (cutoff % 3)
@@ -226,40 +329,37 @@ def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, dd
     config = init(n_points)
 
     # Get temperature points
-    T = np.linspace(1, 5, nt)
+    T = np.linspace(0.05, 0.1, nt)
 
     quantity_dict = dict()
 
     acceptance_rates =list()
-    mc_total = n_points*mc_steps
 
     beta_T = [1/T[nt - t - 1] for t in range(nt)]
 
     configs_avgs = list()
 
     for t in range(nt):
-        configs_t = list()
-
         # initialize temperature
         beta = beta_T[t]
+        kappa = kappa_list[t]
+
+        # Check convergence
+        # convergence = verify_convergence(n_processes, n_chains, eq_steps, beta, n_points, graph)
+        # print("\t Convergence: ", convergence)
 
         print("Beginning temp step: ", t+1)
         # evolve the system to equilibrium
-        n_accepted_list = [0]
-        for _ in range(eq_steps):
-            MC_step(n_points, config, graph, beta, n_accepted_list)
+        if kappa_list:
+            configs, acceptance_rate = mcmc_sampling_vMF(eq_steps, mc_steps, beta, kappa, n_points, graph)
+        else:
+            configs, acceptance_rate = mcmc_sampling(eq_steps, mc_steps, beta, n_points, graph)
+        print("\t The acceptanced rate is", acceptance_rate)
+        acceptance_rates.append(acceptance_rate)
 
-        n_accepted = n_accepted_list[0]
-        print(n_accepted/(eq_steps*n_points))
-
-
-        # Perform sweeps
+        # Collect quantities
         quantities = list()
-        n_accepted_list = [0]
-        for _ in range(mc_steps):
-            MC_step(n_points, config, graph, beta, n_accepted_list)
-            configs_t.append(config)
-
+        for config in configs:
             # Calculate each quantity
             count = 0
             for func in func_list:
@@ -271,17 +371,12 @@ def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, dd
                 finally:
                     count += 1
 
-        config_avg = average_comp_mag(configs_t)
+        config_avg = average_comp_mag(configs)
         for i in range(4):
             try:
                 configs_avgs[i].append(config_avg[i])
             except IndexError:
                 configs_avgs.append([config_avg[i]])
-
-        n_accepted = n_accepted_list[0]
-        acceptance_rate = n_accepted/mc_total
-        acceptance_rates.append(acceptance_rate)
-        #print(acceptance_rate)
     
         # Add quantities to dictionary with errors and relaxation times
         count = 0
@@ -318,13 +413,12 @@ def calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, dd
     return results
 
 
-def plots(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, cutoff_type='m', size=1, error=10**(-8)):
+def plots(nt, eq_steps, mc_steps, group, cutoff, func_list, kappa_list=list(), ddof=0, cutoff_type='m', size=1, error=10**(-8)):
     values = dict()
     errors = dict()
     rel_times = dict()
-    rates = list()
 
-    beta, quantity_dict, configs_avgs, acceptance_rates = calculation(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
+    beta, quantity_dict, configs_avgs, acceptance_rates = calculation(nt, eq_steps, mc_steps, group, cutoff, func_list, kappa_list=kappa_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8))
     
     for k, v in quantity_dict.items():
         try:
@@ -341,52 +435,43 @@ def plots(nt, eq_steps, mc_steps, kappa_list, group, cutoff, func_list, ddof=0, 
             rel_times[k].extend(v["Relaxation times"])
         except KeyError:
             rel_times[k] = v["Relaxation times"]
-    
-    rates = acceptance_rates
 
     
     print("Plotting")
 
-    n_plots = len(func_list) + 2
+    # n_plots = 2*len(func_list) + 2
 
     ncols = 2
-    nrows = round(n_plots/2)
+    nrows = len(func_list) + 1
 
     fig, axs = plt.subplots(nrows, ncols)
-    fig.suptitle("Energies an Boltzmann factor")
+    fig.suptitle("Plot of results")
     fig.tight_layout()
+    fig.set_figheight(1)
+    fig.set_figwidth(9)
 
-    count = 0
     for row in range(nrows):
-        for col in range(ncols):
-            if count > len(func_list) + 1:
-                break
-            try:
-                ax = axs[row, col]
-            except IndexError:
-                ax = axs[col]
+        if row < nrows - 1:
+            ax = axs[row, 0]
+            dict_label = func_list[row].__name__
+            ax.set_title(dict_label)
+            ax.errorbar(x=beta, y=values[dict_label], yerr= errors[dict_label])
 
-            if count == len(func_list):
-                ax.set_title("Boltzmann Distribution")
-                energies = values["avg_energy"]
-                ax.errorbar(x=energies, y=np.exp(np.exp(-1*np.array(beta)*np.array(energies))))
-                count += 1
-            elif count == len(func_list) + 1:
-                ax.set_title("Field Magnitudes")
-                ax.errorbar(x=beta, y=configs_avgs[0], label="+A", color="b")
-                ax.errorbar(x=beta, y=configs_avgs[1], label="-A", color="k")
-                ax.errorbar(x=beta, y=configs_avgs[2], label="+B", color='y')
-                ax.errorbar(x=beta, y=configs_avgs[3], label="-B", color='r')
-                ax.legend()
-            else: 
-                dict_label = func_list[count].__name__
-                ax.set_title(dict_label)
-                ax.errorbar(x=beta, y=values[dict_label], yerr= errors[dict_label])
-                count += 1
+            ax = axs[row, 1]
+            ax.set_title(dict_label + " Relaxation Times")
+            ax.errorbar(x=beta, y=rel_times[dict_label])
+        elif row == nrows - 1:
+            ax = axs[row, 1]
+            ax.set_title("Acceptance Rates")
+            ax.errorbar(x=beta, y=acceptance_rates)
 
-    plt.figure(3)
-    plt.title("Acceptance Rates")
-    plt.plot(beta, rates)
+            ax = axs[row, 0]
+            ax.set_title("Field Magnitudes")
+            ax.errorbar(x=beta, y=configs_avgs[0], label="+A", color="b")
+            ax.errorbar(x=beta, y=configs_avgs[1], label="-A", color="k")
+            ax.errorbar(x=beta, y=configs_avgs[2], label="+B", color='y')
+            ax.errorbar(x=beta, y=configs_avgs[3], label="-B", color='r')
+            ax.legend()
 
     plt.show()
 
@@ -398,9 +483,10 @@ if __name__ == "__main__":
     size = 1
     # mc_steps = 2**15
     mc_steps = 8**4
-    nt = 20
+    nt = 10
     ddof = 1
     func_list = [avg_energy, squared_E]
 
-    kappa_list = np.zeros(nt)
-    plots(nt, eqSteps, mc_steps, kappa_list, group, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))
+    kappa_list = [14.5, 15.87, 17.2, 18.8, 20.5, 22.65, 25.05, 27.7, 30.8, 34.8]
+    # kappa_list = [14.5, 15.1, 15.8, 16.4, 17.1, 17.8, 18.7, 19.4, 20.1, 21.1, 22.2, 23.3, 24.4, 25.8, 26.9, 28.2, 30, 31.5, 33.6, 35.8]
+    plots(nt, eqSteps, mc_steps, group, kappa_list=kappa_list, cutoff=cutoff, func_list=func_list, ddof=ddof, size=size, error=10**(-8))

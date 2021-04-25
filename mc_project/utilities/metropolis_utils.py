@@ -29,7 +29,8 @@ def MC_step(energy_diff, n_points, config, graph, beta, n_accepted_list):
 
         # Accept or deny candidate
         upd = curr
-        del_E = energy_diff(cand, curr, config)
+        neighbors = graph[rand_pos][1]
+        del_E = energy_diff(cand, curr, neighbors, config)
         if del_E < 0:
             upd = cand
             n_accepted_list[0] += 1
@@ -52,7 +53,8 @@ def MC_step_vMF(energy_diff, n_points, config, graph, beta, kappa, n_accepted_li
 
         # Accept or deny candidate
         upd = curr
-        del_E = energy_diff(cand, curr, config)
+        neighbors = graph[rand_pos][1]
+        del_E = energy_diff(cand, curr, neighbors, config)
         if del_E < 0:
             upd = cand
             n_accepted_list[0] += 1

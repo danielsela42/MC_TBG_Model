@@ -44,12 +44,13 @@ def squared_E(config, graph):
     return avg_energy(config, graph)**2
 
 
-def energy_diff(cand, curr, config):
-    curr_sq = curr*curr
-    cand_sq = cand*cand
-    energy_curr = np.sum(curr_sq[0]) - np.sum(curr_sq[1]) + np.sum(curr_sq[2]) - np.sum(curr_sq[3])
-    energy_cand = np.sum(cand_sq[0]) - np.sum(cand_sq[1]) + np.sum(cand_sq[2]) - np.sum(cand_sq[3])
-    energy = energy_cand - energy_curr
+def energy_diff(cand, curr, neighbors, config):
+    energy = 0
+    for j, _ in neighbors:
+        psi_neigh = config[j]
+        cand_diff = cand - psi_neigh
+        curr_diff = curr - psi_neigh
+        energy += np.sum(cand_diff*cand_diff) - np.sum(curr_diff*curr_diff)
     return energy
 
 
@@ -126,12 +127,12 @@ if __name__ == "__main__":
     group = 'h'
     cutoff = 9
     size = 1
-    mc_steps = 2**15
-    # mc_steps = 8**4
-    nt = 30
+    # mc_steps = 2**15
+    mc_steps = 8**4
+    nt = 20
     ddof = 1
     func_list = [avg_energy, squared_E]
-    beta_range = [5, 20]
+    beta_range = [5, 15]
 
     # kappa_list = [14.5, 15.87, 17.2, 18.8, 20.5, 22.65, 25.05, 27.7, 30.8, 34.8]
     # kappa_list = [14.5, 15.1, 15.8, 16.4, 17.1, 17.8, 18.7, 19.4, 20.1, 21.1, 22.2, 23.3, 24.4, 25.8, 26.9, 28.2, 30, 31.5, 33.6, 35.8]

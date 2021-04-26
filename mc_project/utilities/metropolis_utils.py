@@ -248,7 +248,7 @@ def verify_convergence(energy_diff, n_processes, n_chains, eq_steps, beta, n_poi
         return False
 
 
-def adaptive_sampling(energy_diff, eq_steps, mc_steps, beta, n_points, graph, n_processes=12):
+def adaptive_sampling(energy_diff, eq_steps, mc_steps, beta, n_points, graph, n_processes=12, max_iters=3):
     kappa_list_init = [1] + list(np.linspace(5, 50, n_processes-1))
 
     args_list = [(energy_diff, eq_steps, 2*eq_steps, beta, kappa, n_points, graph) for kappa in kappa_list_init]
@@ -291,12 +291,21 @@ def adaptive_sampling(energy_diff, eq_steps, mc_steps, beta, n_points, graph, n_
             print(acceptance_rate)
             raise Exception("Failed to find good concentration parameter: problem near uniformity")
     else:
-        configs, acceptance_rate = mcmc_sampling_vMF(energy_diff, eq_steps, mc_steps, beta, kappa_guess, n_points, graph)
-        if 0.22 < acceptance_rate < 0.25:
-            return configs, acceptance_rate
+        kappa_list = kappa_list_init
+        count = 0
+        configs, acceptance_rate = mcmc_sampling_vMF(energy_diff, eq_steps, eq_steps, beta, kappa_guess, n_points, graph)
+        acceptance_rates.append(acceptance_rate)
+        kappa_list.append(kappa_guess)
+        kappa_guess = np.interp(0.234, acceptance_rates, kappa_list)
+        while acceptance_rate > 0.25 or acceptance_rate < 0.20:
+            configs, acceptance_rate = mcmc_sampling_vMF(energy_diff, eq_steps, eq_steps, beta, kappa_guess, n_points, graph)
+            acceptance_rates.append(acceptance_rate)
+            kappa_list.append(kappa_guess)
+            kappa_guess = np.interp(0.234, acceptance_rates, kappa_list)
+            count += 1
+            if count > max_iters: raise Exception("Reached max_iters in adaptive sampling: Last acceptance rate was {}".format(acceptance_rate))
         else:
-            print(acceptance_rate)
-            raise Exception("Failed to find good concentration parameter: bad interpolated guess")
+            return mcmc_sampling_vMF(energy_diff, eq_steps, mc_steps, beta, kappa_guess, n_points, graph)
 
 
 def calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, func_list, convergence=False, n_chains=12, kappa_list=list(), n_processes=12, ddof=0, cutoff_type='m', size=1, error=10**(-8), log_to_consol=False):

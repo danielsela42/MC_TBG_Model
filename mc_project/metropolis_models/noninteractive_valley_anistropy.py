@@ -33,7 +33,7 @@ def total_E(config, graph):
     total_energy = 0
     for i in range(len(config)):
         psi = config[i]
-        total_energy += np.sum(psi[0]*psi[0]) - np.sum(psi[1]*psi[1]) + np.sum(psi[2]*psi[2]) - np.sum(psi[3]*psi[3])
+        total_energy += np.sum(psi[0]*psi[0]) - np.sum(psi[1]*psi[1]) + 3*np.sum(psi[2]*psi[2]) - 3*np.sum(psi[3]*psi[3])
     return total_energy
 
 
@@ -128,10 +128,10 @@ if __name__ == "__main__":
     size = 1
     # mc_steps = 2**15
     mc_steps = 8**4
-    nt = 20
+    nt = 5
     ddof = 1
     func_list = [avg_energy, squared_E]
-    beta_range = [5, 15]
+    beta_range = [5, 10]
 
     # kappa_list = [14.5, 15.87, 17.2, 18.8, 20.5, 22.65, 25.05, 27.7, 30.8, 34.8]
     # kappa_list = [14.5, 15.1, 15.8, 16.4, 17.1, 17.8, 18.7, 19.4, 20.1, 21.1, 22.2, 23.3, 24.4, 25.8, 26.9, 28.2, 30, 31.5, 33.6, 35.8]

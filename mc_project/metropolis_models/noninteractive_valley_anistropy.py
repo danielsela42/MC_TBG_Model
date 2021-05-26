@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from mc_project.utilities import LatticeStructure
 from mc_project.utilities import sample_vMF
 from mc_project.utilities import calculation
+import statsmodels.api as sm
+from statsmodels.distributions.mixture_rvs import mixture_rvs
 
 
 def average_comp_mag(configs):
@@ -33,7 +35,7 @@ def total_E(config, graph):
     total_energy = 0
     for i in range(len(config)):
         psi = config[i]
-        total_energy += np.sum(psi[0]*psi[0]) - np.sum(psi[1]*psi[1]) + 3*np.sum(psi[2]*psi[2]) - 3*np.sum(psi[3]*psi[3])
+        total_energy += np.sum(psi[0]*psi[0]) - np.sum(psi[1]*psi[1]) + np.sum(psi[2]*psi[2]) - np.sum(psi[3]*psi[3])
     return total_energy
 
 
@@ -58,8 +60,9 @@ def plots(nt, beta_range, eq_steps, mc_steps, group, cutoff, func_list, kappa_li
     errors = dict()
     rel_times = dict()
 
-    beta, chains, quantity_dict, acceptance_rates = calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, func_list, kappa_list=kappa_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8), log_to_consol=True)
-    
+    beta, chains, quantity_dict, acceptance_rates, all_quantities = calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, func_list, kappa_list=kappa_list, ddof=ddof,cutoff_type='m', size=1, error=10**(-8), log_to_consol=True)
+    energies = [q[2] for q in all_quantities]
+
     configs_avgs = [list(), list(), list(), list()]
     for chain in chains:
         for i in range(4):
@@ -80,6 +83,8 @@ def plots(nt, beta_range, eq_steps, mc_steps, group, cutoff, func_list, kappa_li
             rel_times[k].extend(v["Relaxation times"])
         except KeyError:
             rel_times[k] = v["Relaxation times"]
+
+    # dens_u = sm.nonparametric.KDEMultivariate(data=energies, var_type='cc', bw='normal_reference')
 
     
     print("Plotting")
@@ -118,6 +123,11 @@ def plots(nt, beta_range, eq_steps, mc_steps, group, cutoff, func_list, kappa_li
             ax.errorbar(x=beta, y=configs_avgs[3], label="-B", color='r')
             ax.legend()
 
+    for i in range(len(chains)):
+        fig = plt.figure(i+2)
+        energy_list = energies[i]
+        plt.hist(energy_list, bins=20, density=True)
+        # plt.scatter(energy_list, np.exp(-1*beta[i]*np.array(energy_list)))
     plt.show()
 
 
@@ -130,7 +140,7 @@ if __name__ == "__main__":
     mc_steps = 8**4
     nt = 5
     ddof = 1
-    func_list = [avg_energy, squared_E]
+    func_list = [avg_energy, squared_E, total_E]
     beta_range = [5, 10]
 
     # kappa_list = [14.5, 15.87, 17.2, 18.8, 20.5, 22.65, 25.05, 27.7, 30.8, 34.8]

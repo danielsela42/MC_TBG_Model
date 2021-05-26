@@ -344,6 +344,7 @@ def calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, 
     beta_T = np.linspace(beta_range[0], beta_range[1], nt)
 
     quantity_dict = dict()
+    all_quantities = list()
 
     acceptance_rates =list()
 
@@ -367,9 +368,9 @@ def calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, 
         else:
             configs, acceptance_rate = mcmc_sampling_vMF(energy_diff, eq_steps, mc_steps, beta, kappa_list[t], n_points, graph)
         if log_to_consol: print("\t The acceptance rate is", acceptance_rate)
+    
         acceptance_rates.append(acceptance_rate)
-
-        chains.append(configs)
+        chains.append(configs.copy())
 
         # Collect quantities
         quantities = list()
@@ -384,6 +385,7 @@ def calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, 
                     quantities.append([quantity])
                 finally:
                     count += 1
+        all_quantities.append(quantities)
     
         # Add quantities to dictionary with errors and relaxation times
         count = 0
@@ -415,6 +417,6 @@ def calculation(nt, beta_range, eq_steps, mc_steps, energy_diff, group, cutoff, 
             count += 1
         
 
-    results = [beta_T, chains, quantity_dict, acceptance_rates]
+    results = [beta_T, chains, quantity_dict, acceptance_rates, all_quantities]
 
     return results

@@ -27,10 +27,8 @@ def total_E(config, graph):
     total_energy = 0
     for i in range(len(config)):
         psi = config[i]
-        for ind, _ in graph[i][1]:
-            diff = psi - config[ind]
-            total_energy += sum(sum(diff*diff))
-    return total_energy/2
+        total_energy += np.sum(psi[0]*psi[0]) + np.sum(psi[1]*psi[1]) + np.sum(psi[2]*psi[2]) + np.sum(psi[3]*psi[3])
+    return total_energy
 
 
 def avg_energy(config, graph):
@@ -40,13 +38,12 @@ def squared_E(config, graph):
     return avg_energy(config, graph)**2
 
 
-def energy_diff(cand, curr, neighbors, config):
-    energy = 0
-    for j, _ in neighbors:
-        psi_neigh = config[j]
-        cand_diff = cand - psi_neigh
-        curr_diff = curr - psi_neigh
-        energy += np.sum(cand_diff*cand_diff) - np.sum(curr_diff*curr_diff)
+def energy_diff(cand, curr, config, graph):
+    curr_sq = curr*curr
+    cand_sq = cand*cand
+    energy_curr = np.sum(curr_sq[0]) + np.sum(curr_sq[1]) + np.sum(curr_sq[2]) + np.sum(curr_sq[3])
+    energy_cand = np.sum(cand_sq[0]) + np.sum(cand_sq[1]) + np.sum(cand_sq[2]) + np.sum(cand_sq[3])
+    energy = energy_cand - energy_curr
     return energy
 
 def plots(nt, beta_range, eq_steps, mc_steps, group, cutoff, func_list, kappa_list=list(), ddof=0, cutoff_type='m', size=1, error=10**(-8)):
